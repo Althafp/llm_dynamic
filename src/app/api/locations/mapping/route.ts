@@ -3,6 +3,8 @@ import * as XLSX from 'xlsx';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
+export const runtime = 'nodejs';
+
 interface LocationMapping {
   ip: string;
   latitude: number;

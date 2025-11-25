@@ -2,6 +2,8 @@ import { NextRequest } from 'next/server';
 import { analyzeImages } from '@/lib/openai-analyzer';
 import { listImages, saveAnalysisResults } from '@/lib/gcp-storage';
 
+export const runtime = 'nodejs';
+
 export async function POST(request: NextRequest) {
   const encoder = new TextEncoder();
   

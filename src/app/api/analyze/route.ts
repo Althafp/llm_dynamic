@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { analyzeImages } from '@/lib/openai-analyzer';
 import { listImages, saveAnalysisResults } from '@/lib/gcp-storage';
 
+export const runtime = 'nodejs';
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
