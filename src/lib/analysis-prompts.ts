@@ -1,0 +1,64 @@
+export interface AnalysisPrompt {
+    id: string;
+    name: string;
+    searchObjective: string;
+    lookingFor: string;
+    detectionCriteria: string;
+  }
+  
+  export const ANALYSIS_PROMPTS: AnalysisPrompt[] = [
+    {
+      id: 'crowd_detection',
+      name: 'Crowd Detection',
+      searchObjective: 'Detect and measure the presence of large gatherings of people in Indian public areas.',
+      lookingFor: 'crowd clusters or dense gatherings',
+      detectionCriteria:
+        'Identify large groups of people standing close together, forming clusters, or causing crowding. Focus on areas like markets, bus stands, temples, roadside shops, or footpaths where dense gatherings commonly occur in India.',
+    },
+    {
+      id: 'no_parking',
+      name: 'No Parking Violation',
+      searchObjective: 'Detect vehicles parked in prohibited or restricted zones commonly seen on Indian roads.',
+      lookingFor: 'illegally parked two-wheelers, cars, or autos',
+      detectionCriteria:
+        'Detect vehicles stopped in no-parking zones, blocking footpaths, near gates, shop entrances, bus stops, or near "No Parking" signboards. Also check for vehicles parked on narrow Indian streets causing obstruction.',
+    },
+    {
+    id: 'garbage_detection',
+    name: 'Garbage Detection',
+    searchObjective: 'Identify noticeable garbage or waste accumulation in public areas.',
+    lookingFor: 'visible piles of garbage, multiple litter items, or overflowing bins.',
+    detectionCriteria:
+        'Detect garbage only when it is clearly visible and significant enough to impact cleanliness. Valid cases include: (1) piles of trash or multiple pieces of litter grouped together, (2) overflowing garbage bins, or (3) noticeable waste dumped in open areas. Ignore very small or isolated items such as a single wrapper, cup, leaf, or tiny paper unless part of a larger littered area.',
+    },
+
+    {
+    id: 'pothole_detection',
+    name: 'Pothole Detection',
+    searchObjective: 'Detect only those potholes or road damages that require contractor-level repair.',
+    lookingFor: 'major potholes, severe cracks, structural road damage',
+    detectionCriteria:
+        'Identify only significant road defects that clearly require contractor repair work. Focus on deep potholes, wide cracks, broken asphalt, or road damage that affects vehicle movement or safety. Ignore small patches, surface discoloration, or minor wear and tear. Detect damage only when it is visibly substantial and cannot be ignored by municipal maintenance teams.',
+    },
+
+    {
+      id: 'congestion_detection',
+      name: 'Traffic Congestion',
+      searchObjective: 'Analyze the level of traffic congestion in Indian road conditions.',
+      lookingFor: 'slow-moving or tightly packed traffic',
+      detectionCriteria:
+        'Look for long queues of vehicles, closely packed traffic, minimal movement, and mixed traffic density involving cars, bikes, autos, buses, and pedestrians. Identify typical Indian congestion scenarios like bottlenecks at junctions or market areas.',
+    },
+    {
+        id: 'wrong_driving',
+        name: 'Wrong-Way / Wrong Driving',
+        searchObjective: 'Detect vehicles moving against the normal flow of traffic on the road.',
+        lookingFor: 'vehicles moving opposite to expected lane direction.',
+        detectionCriteria:
+          'Identify wrong-way driving when there is reasonable visual evidence of traffic flow direction. Valid indicators include: (1) visible road markings such as arrows, lane dividers, or medians, (2) presence of other vehicles moving in a consistent direction, or (3) clear road structure that suggests intended traffic flow. The model should avoid assumptions based purely on camera angle or rider body orientation. If traffic direction is genuinely unclear, output: "Direction unclear in this frame."',
+      }
+      
+      
+      
+  ];
+  
