@@ -11,7 +11,7 @@ The proper way to secure your API key is through **domain restrictions** in Goog
 
 1. **Go to Google Cloud Console:**
    - Visit: https://console.cloud.google.com/apis/credentials
-   - Find your API key (`AIzaSyDjr7_hvfbfbtHQyK7lgPbt4lkw9oxwM4E`)
+   - Find your API key (``)
 
 2. **Click on the API key to edit it**
 
