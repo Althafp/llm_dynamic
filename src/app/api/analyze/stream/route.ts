@@ -18,12 +18,18 @@ export async function POST(request: NextRequest) {
       let images: Array<{ path: string; url?: string; filename: string; date: string; cameraType: string }> = [];
       let checkpointPath: string | null = null;
       let date: string = '';
-      let cameraType: string | undefined = undefined;
+      let cameraType: 'ANALYTICS' | 'FIXED' | 'PTZ' | undefined = undefined;
 
       try {
         const body = await request.json();
         date = body.date;
-        cameraType = body.cameraType;
+        // Validate cameraType to match expected type
+        const rawCameraType = body.cameraType;
+        if (rawCameraType === 'ANALYTICS' || rawCameraType === 'FIXED' || rawCameraType === 'PTZ') {
+          cameraType = rawCameraType;
+        } else {
+          cameraType = undefined;
+        }
         const { imagePaths, analysisTypes } = body;
 
         if (!date) {
