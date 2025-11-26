@@ -50,13 +50,19 @@ export interface AnalysisPrompt {
         'Look for long queues of vehicles, closely packed traffic, minimal movement, and mixed traffic density involving cars, bikes, autos, buses, and pedestrians. Identify typical Indian congestion scenarios like bottlenecks at junctions or market areas.',
     },
     {
-        id: 'wrong_driving',
-        name: 'Wrong-Way / Wrong Driving',
-        searchObjective: 'Detect vehicles moving against the normal flow of traffic on the road.',
-        lookingFor: 'vehicles moving opposite to expected lane direction.',
-        detectionCriteria:
-          'Identify wrong-way driving when there is reasonable visual evidence of traffic flow direction. Valid indicators include: (1) visible road markings such as arrows, lane dividers, or medians, (2) presence of other vehicles moving in a consistent direction, or (3) clear road structure that suggests intended traffic flow. The model should avoid assumptions based purely on camera angle or rider body orientation. If traffic direction is genuinely unclear, output: "Direction unclear in this frame."',
-      }
+      id: 'wrong_driving',
+      name: 'Wrong-Way / Wrong Driving',
+      searchObjective: 'Detect vehicles genuinely moving against the correct traffic flow.',
+      lookingFor: 'vehicles traveling opposite to the intended direction of the lane they are in.',
+      detectionCriteria:
+        'Detect wrong-way driving ONLY when traffic direction can be clearly understood from: \
+        (1) visible road markers (arrows, dividers, medians), or \
+        (2) at least one other vehicle in the same lane moving in a clear direction. \
+        Ignore cases with only a single vehicle when lane direction cannot be determined. \
+        Do NOT rely on camera angle, rider posture, or assumptions when direction is unclear. \
+        If traffic direction cannot be confidently identified, output: "Direction unclear in this frame."'
+    }
+    
       
       
       

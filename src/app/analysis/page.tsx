@@ -356,51 +356,6 @@ function AnalysisPageContent() {
             </div>
           </div>
 
-          {/* Image Show Filter */}
-          {selectedDate && (
-            <div className="bg-white border border-gray-300 rounded-lg p-6 mb-6 shadow-sm">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <svg className="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                  <h2 className="text-2xl font-bold text-black">Images</h2>
-                </div>
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={showImageSelector}
-                    onChange={(e) => {
-                      setShowImageSelector(e.target.checked);
-                      if (!e.target.checked) {
-                        // If unchecked, automatically select all images
-                        loadAllImages();
-                      } else {
-                        // If checked, clear selection to show selector
-                        setSelectedImages([]);
-                      }
-                    }}
-                    className="w-4 h-4 text-black border-gray-300 rounded focus:ring-black"
-                  />
-                  <span className="text-sm font-medium text-gray-800">Image show</span>
-                </label>
-              </div>
-              {showImageSelector ? (
-                <ImageSelector
-                  selectedDate={selectedDate}
-                  selectedCameraType={selectedCameraType || undefined}
-                  onImagesSelected={setSelectedImages}
-                />
-              ) : (
-                <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-                  <p className="text-sm text-gray-600">
-                    All images for the selected date and camera type will be automatically analyzed ({allImages.length} images).
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
-
           {/* Analysis Controls */}
           <div className="bg-white border border-gray-300 rounded-lg p-6 mb-6 shadow-sm">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -490,6 +445,51 @@ function AnalysisPageContent() {
               </div>
             )}
           </div>
+
+          {/* Image Show Filter */}
+          {selectedDate && (
+            <div className="bg-white border border-gray-300 rounded-lg p-6 mb-6 shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <svg className="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  <h2 className="text-2xl font-bold text-black">Images</h2>
+                </div>
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={showImageSelector}
+                    onChange={(e) => {
+                      setShowImageSelector(e.target.checked);
+                      if (!e.target.checked) {
+                        // If unchecked, automatically select all images
+                        loadAllImages();
+                      } else {
+                        // If checked, clear selection to show selector
+                        setSelectedImages([]);
+                      }
+                    }}
+                    className="w-4 h-4 text-black border-gray-300 rounded focus:ring-black"
+                  />
+                  <span className="text-sm font-medium text-gray-800">Image show</span>
+                </label>
+              </div>
+              {showImageSelector ? (
+                <ImageSelector
+                  selectedDate={selectedDate}
+                  selectedCameraType={selectedCameraType || undefined}
+                  onImagesSelected={setSelectedImages}
+                />
+              ) : (
+                <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <p className="text-sm text-gray-600">
+                    All images for the selected date and camera type will be automatically analyzed ({allImages.length} images).
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Current Results */}
           {showResults && analysisResults.length > 0 && (

@@ -9,7 +9,7 @@ from google.cloud import storage
 from tqdm import tqdm
 
 # Configuration
-LOCAL_IMAGES_DIR = Path(r"D:\chandu sir\llm_dynamic_daily\images\2025-11-24")
+LOCAL_IMAGES_DIR = Path(r"D:\chandu sir\llm_dynamic_daily\images\2025-11-26")
 BUCKET_NAME = "llm_dynamic"
 GCS_KEY_PATH = Path(r"D:\chandu sir\llm_dynamic_daily\gcs-key.json")
 

@@ -150,17 +150,8 @@ export default function AnalyticsDashboard({ results }: AnalyticsDashboardProps)
     matchRate: p.totalAnalyzed > 0 ? ((p.matches / p.totalAnalyzed) * 100).toFixed(1) : 0,
   }));
 
-  const cameraTypeChartData = stats.byCameraType.map((type) => ({
-    name: type.cameraType,
-    count: type.count,
-    successful: type.successful,
-    failed: type.count - type.successful,
-  }));
-
-  const successPieData = [
-    { name: 'Successful', value: stats.successful, color: '#000000' },
-    { name: 'Failed', value: stats.failed, color: '#9CA3AF' },
-  ];
+  // Note: We focus on locations and matches; camera-type and success/fail breakdown
+  // charts have been removed per UX requirements.
 
   return (
     <div className="bg-white border border-gray-300 rounded-lg p-6 shadow-sm space-y-6">
@@ -172,88 +163,31 @@ export default function AnalyticsDashboard({ results }: AnalyticsDashboardProps)
       </div>
       
       {/* Overall Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="bg-gray-50 border border-gray-300 p-6 rounded-lg">
           <div className="flex items-center justify-between mb-2">
-            <div className="text-sm text-gray-600">Total Images</div>
+            <div className="text-sm text-gray-600">Total Locations</div>
             <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
           </div>
           <div className="text-3xl font-bold text-black">{stats.totalImages}</div>
         </div>
         <div className="bg-gray-50 border border-gray-300 p-6 rounded-lg">
           <div className="flex items-center justify-between mb-2">
-            <div className="text-sm text-gray-600">Successful</div>
+            <div className="text-sm text-gray-600">Successful Analyses</div>
             <svg className="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
           <div className="text-3xl font-bold text-black">{stats.successful}</div>
         </div>
-        <div className="bg-gray-50 border border-gray-300 p-6 rounded-lg">
-          <div className="flex items-center justify-between mb-2">
-            <div className="text-sm text-gray-600">Failed</div>
-            <svg className="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </div>
-          <div className="text-3xl font-bold text-black">{stats.failed}</div>
-        </div>
       </div>
 
-      {/* Charts Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Success Rate Pie Chart */}
-        <div className="bg-gray-50 rounded-lg border border-gray-300 p-6">
-          <h3 className="text-lg font-semibold mb-4 text-black">Success Rate</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
-              <Pie
-                data={successPieData}
-                cx="50%"
-                cy="50%"
-                labelLine={false}
-                label={({ name, percent }) => `${name}: ${percent ? (percent * 100).toFixed(0) : 0}%`}
-                outerRadius={100}
-                fill="#8884d8"
-                dataKey="value"
-              >
-                {successPieData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.color} />
-                ))}
-              </Pie>
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-
-        {/* Camera Type Bar Chart */}
-        <div className="bg-gray-50 rounded-lg border border-gray-300 p-6">
-          <h3 className="text-lg font-semibold mb-4 text-black">Analysis by Camera Type</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={cameraTypeChartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-              <XAxis dataKey="name" stroke="#6B7280" />
-              <YAxis stroke="#6B7280" />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: '#fff',
-                  border: '1px solid #D1D5DB',
-                  borderRadius: '8px',
-                }}
-              />
-              <Legend />
-              <Bar dataKey="successful" fill="#000000" name="Successful" />
-              <Bar dataKey="failed" fill="#9CA3AF" name="Failed" />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* Analysis by Prompt - Bar Chart */}
+      {/* Detections Found - Bar Chart */}
       <div className="bg-gray-50 rounded-lg border border-gray-300 p-6">
-        <h3 className="text-lg font-semibold mb-4 text-black">Matches by Analysis Type</h3>
+        <h3 className="text-lg font-semibold mb-4 text-black">Detections Found</h3>
         <ResponsiveContainer width="100%" height={400}>
           <BarChart data={promptChartData} layout="vertical">
             <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
@@ -278,9 +212,9 @@ export default function AnalyticsDashboard({ results }: AnalyticsDashboardProps)
         </ResponsiveContainer>
       </div>
 
-      {/* Match Rate Line Chart */}
+      {/* Analytics Detection Percentage - Line Chart */}
       <div className="bg-gray-50 rounded-lg border border-gray-300 p-6">
-        <h3 className="text-lg font-semibold mb-4 text-black">Match Rate by Analysis Type (%)</h3>
+        <h3 className="text-lg font-semibold mb-4 text-black">Analytics Detection Percentage</h3>
         <ResponsiveContainer width="100%" height={300}>
           <LineChart data={promptChartData}>
             <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />

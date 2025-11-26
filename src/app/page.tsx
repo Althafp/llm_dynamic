@@ -37,38 +37,9 @@ export default function DashboardPage() {
       const datesData = await datesResponse.json();
       if (datesData.success) {
         const dates = datesData.dates || [];
+        // We only need the list of available dates for the sidebar card
+        // No need to fetch images for every date here (keeps dashboard fast)
         setAvailableDates(dates);
-        
-        // Check all dates to find the one with most images
-        if (dates.length > 0) {
-          let maxImages = 0;
-          let dateWithMostImages = dates[0];
-          
-          // Check each date to find the one with most images
-          for (const date of dates) {
-            try {
-              const imagesResponse = await fetch(`/api/images/list?date=${date}`);
-              const imagesData = await imagesResponse.json();
-              if (imagesData.success) {
-                const imageCount = imagesData.images?.length || 0;
-                if (imageCount > maxImages) {
-                  maxImages = imageCount;
-                  dateWithMostImages = date;
-                }
-              }
-            } catch (error) {
-              console.error(`Error loading images for date ${date}:`, error);
-            }
-          }
-          
-          // Set the count from the date with most images (for both Available Images and Total Locations)
-          setStats(prev => ({ 
-            ...prev, 
-            totalImages: maxImages,
-            totalLocations: maxImages // Same count for Total Locations
-          }));
-          console.log(`Date with most images: ${dateWithMostImages} (${maxImages} images)`);
-        }
       }
 
       // Load recent analysis results
@@ -77,14 +48,18 @@ export default function DashboardPage() {
       if (resultsData.success) {
         const results = resultsData.results || [];
         setRecentResults(results.slice(0, 5)); // Last 5
+
+        // Total Locations = maximum images processed in any single analysis run
+        const totalLocations = results.reduce(
+          (max: number, r: any) => Math.max(max, r.totalImages || 0),
+          0
+        );
+
         setStats(prev => ({
           ...prev,
           totalAnalyses: results.length,
           recentAnalyses: results.slice(0, 7).length,
-          successRate: results.length > 0 
-            ? Math.round((results.reduce((sum: number, r: any) => sum + r.successful, 0) / 
-                         results.reduce((sum: number, r: any) => sum + r.totalImages, 0)) * 100)
-            : 0,
+          totalLocations,
         }));
       }
     } catch (error) {
@@ -98,7 +73,12 @@ export default function DashboardPage() {
     <div className="min-h-screen bg-gray-50">
       {/* Page Header */}
       <div className="bg-white border-b border-gray-300 px-6 py-4">
-        <h1 className="text-2xl font-bold text-black">Dashboard</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-bold text-black">Dashboard</h1>
+          <span className="px-3 py-1 text-xs font-semibold uppercase tracking-wide bg-black text-white rounded-full border border-gray-700">
+            Guntur Experimental
+          </span>
+        </div>
         <p className="text-sm text-gray-600 mt-1">Overview of your CCTV analysis system</p>
       </div>
 
@@ -117,7 +97,7 @@ export default function DashboardPage() {
           ) : (
             <div className="space-y-6">
               {/* Stats Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 <div className="bg-white rounded-lg p-6 border border-gray-300 shadow-sm hover:shadow-md transition-all">
                   <div className="flex items-center justify-between mb-4">
                     <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center border border-gray-300">
@@ -129,7 +109,6 @@ export default function DashboardPage() {
                   </div>
                   <div className="text-3xl font-bold text-black mb-1">{stats.totalLocations}</div>
                   <div className="text-sm text-gray-600">Total Locations</div>
-                  <div className="text-xs text-gray-500 mt-1">(Date with most images)</div>
                 </div>
 
                 <div className="bg-white rounded-lg p-6 border border-gray-300 shadow-sm hover:shadow-md transition-all">
@@ -156,17 +135,7 @@ export default function DashboardPage() {
                   <div className="text-sm text-gray-600">Recent Analyses</div>
                 </div>
 
-                <div className="bg-white rounded-lg p-6 border border-gray-300 shadow-sm hover:shadow-md transition-all">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center border border-gray-300">
-                      <svg className="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                      </svg>
-                    </div>
-                  </div>
-                  <div className="text-3xl font-bold text-black mb-1">{stats.successRate}%</div>
-                  <div className="text-sm text-gray-600">Success Rate</div>
-                </div>
+                {/* Removed Success Rate card as requested */}
               </div>
 
               {/* Quick Actions */}
