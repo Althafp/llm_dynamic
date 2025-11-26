@@ -204,6 +204,7 @@ export async function getImageAsBase64(imagePath: string): Promise<string> {
 /**
  * Save analysis results to GCP
  * Structure: results/TIMESTAMP/results.json
+ * @param existingPath - Optional path to update existing file (for incremental saves)
  */
 export async function saveAnalysisResults(
   results: any[],
@@ -211,23 +212,31 @@ export async function saveAnalysisResults(
     date?: string;
     cameraType?: string;
     totalImages?: number;
-  }
+  },
+  existingPath?: string | null
 ): Promise<string> {
   const client = getStorageClient();
   const bucket = client.bucket(BUCKET_NAME);
   
-  // Create timestamp folder: YYYYMMDD_HHMMSS
-  const now = new Date();
-  const timestamp = now.toISOString().replace(/[-:]/g, '').split('.')[0].replace('T', '_');
-  const resultPath = `results/${timestamp}/results.json`;
+  // Use existing path if provided, otherwise create new timestamp
+  let resultPath: string;
+  if (existingPath) {
+    resultPath = existingPath;
+  } else {
+    const now = new Date();
+    const timestamp = now.toISOString().replace(/[-:]/g, '').split('.')[0].replace('T', '_');
+    resultPath = `results/${timestamp}/results.json`;
+  }
   
   // Prepare result data
+  const now = new Date();
   const resultData = {
     timestamp: now.toISOString(),
     metadata: {
       date: metadata?.date || 'unknown',
       cameraType: metadata?.cameraType || 'all',
       totalImages: metadata?.totalImages || results.length,
+      processedImages: results.length, // Track how many actually processed
     },
     results,
     summary: {
@@ -235,9 +244,10 @@ export async function saveAnalysisResults(
       successful: results.filter((r: any) => r.status === 'success').length,
       failed: results.filter((r: any) => r.status === 'error').length,
     },
+    isPartial: existingPath ? true : false, // Mark if this is a checkpoint
   };
   
-  // Upload to GCP
+  // Upload to GCP (overwrites if exists)
   const file = bucket.file(resultPath);
   await file.save(JSON.stringify(resultData, null, 2), {
     contentType: 'application/json',
@@ -246,11 +256,13 @@ export async function saveAnalysisResults(
         timestamp: now.toISOString(),
         date: metadata?.date || '',
         cameraType: metadata?.cameraType || '',
+        isPartial: existingPath ? 'true' : 'false',
       },
     },
   });
   
-  console.log(`Results saved to: ${resultPath}`);
+  const saveType = existingPath ? 'Checkpoint' : 'Results';
+  console.log(`${saveType} saved to: ${resultPath} (${results.length} images)`);
   return resultPath;
 }
 

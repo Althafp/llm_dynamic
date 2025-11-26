@@ -28,7 +28,7 @@ interface MapViewProps {
 
 const containerStyle = {
   width: '100%',
-  height: '600px',
+  height: '700px',
 };
 
 const defaultCenter = {
@@ -107,53 +107,107 @@ export default function MapView({ matchedImages, locationMapping }: MapViewProps
   }
 
   return (
-    <div className="bg-white border border-gray-300 rounded-lg overflow-hidden">
-      <div className="p-4 bg-gray-50 border-b border-gray-300">
-        <h3 className="text-lg font-semibold text-gray-800">Map View - Matched Locations</h3>
-        <p className="text-sm text-gray-600 mt-1">{markers.length} unique location(s) found</p>
+    <div className="bg-white border border-gray-300 rounded-lg overflow-hidden shadow-lg">
+      <div className="p-5 bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-300">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+              <svg className="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              Map View - Matched Locations
+            </h3>
+            <p className="text-sm text-gray-600 mt-1.5 flex items-center gap-2">
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 border border-blue-300">
+                {markers.length} location{markers.length !== 1 ? 's' : ''}
+              </span>
+              <span className="text-gray-500">•</span>
+              <span>{matchedImages.length} image{matchedImages.length !== 1 ? 's' : ''} matched</span>
+            </p>
+          </div>
+        </div>
       </div>
-      <GoogleMap
-        mapContainerStyle={containerStyle}
-        center={mapCenter}
-        zoom={markers.length > 0 ? 11 : 10}
-      >
-        {markers.map((marker, idx) => (
-          <Marker
-            key={idx}
-            position={{ lat: marker.latitude, lng: marker.longitude }}
-            onClick={() => setSelectedMarker(marker)}
-            title={marker.locationName || marker.filename}
-          />
-        ))}
-        
-        {selectedMarker && (
-          <InfoWindow
-            position={{
-              lat: selectedMarker.latitude!,
-              lng: selectedMarker.longitude!,
-            }}
-            onCloseClick={() => setSelectedMarker(null)}
-          >
-            <div className="p-2 max-w-xs">
-              <h4 className="font-semibold text-gray-800 mb-1">
-                {selectedMarker.locationName || selectedMarker.filename}
-              </h4>
-              <p className="text-xs text-gray-600 mb-2">{selectedMarker.filename}</p>
-              <p className="text-xs text-gray-600 mb-2">IP: {selectedMarker.ip}</p>
-              <div className="text-xs text-gray-600 mb-2">
-                <strong>Analysis Types:</strong> {selectedMarker.analysisTypes.join(', ')}
+      <div className="relative">
+        <GoogleMap
+          mapContainerStyle={containerStyle}
+          center={mapCenter}
+          zoom={markers.length > 0 ? 11 : 10}
+          options={{
+            styles: [
+              {
+                featureType: 'poi',
+                elementType: 'labels',
+                stylers: [{ visibility: 'off' }],
+              },
+            ],
+            mapTypeControl: true,
+            streetViewControl: true,
+            fullscreenControl: true,
+          }}
+        >
+          {markers.map((marker, idx) => (
+            <Marker
+              key={idx}
+              position={{ lat: marker.latitude, lng: marker.longitude }}
+              onClick={() => setSelectedMarker(marker)}
+              title={marker.locationName || marker.filename}
+            />
+          ))}
+          
+          {selectedMarker && (
+            <InfoWindow
+              position={{
+                lat: selectedMarker.latitude!,
+                lng: selectedMarker.longitude!,
+              }}
+              onCloseClick={() => setSelectedMarker(null)}
+            >
+              <div className="p-3 max-w-sm">
+                <div className="mb-3">
+                  <h4 className="font-bold text-gray-900 text-base mb-1 flex items-center gap-2">
+                    <svg className="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    {selectedMarker.locationName || selectedMarker.filename}
+                  </h4>
+                  <p className="text-xs text-gray-600 mb-2 font-mono">{selectedMarker.filename}</p>
+                </div>
+                
+                <div className="mb-3 p-2 bg-gray-50 rounded border border-gray-200">
+                  <p className="text-xs text-gray-700 mb-1">
+                    <span className="font-semibold">Camera IP:</span> {selectedMarker.ip}
+                  </p>
+                  <div className="mt-2">
+                    <span className="text-xs font-semibold text-gray-700">Analysis Types:</span>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {selectedMarker.analysisTypes.map((type, idx) => (
+                        <span
+                          key={idx}
+                          className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded text-xs font-medium border border-blue-300"
+                        >
+                          {type}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                
+                {selectedMarker.url && (
+                  <div className="mt-3">
+                    <img
+                      src={selectedMarker.url}
+                      alt={selectedMarker.filename}
+                      className="w-full h-40 object-cover rounded-lg border-2 border-gray-300 shadow-sm hover:shadow-md transition-shadow"
+                    />
+                  </div>
+                )}
               </div>
-              {selectedMarker.url && (
-                <img
-                  src={selectedMarker.url}
-                  alt={selectedMarker.filename}
-                  className="mt-2 w-full h-32 object-cover rounded border border-gray-200"
-                />
-              )}
-            </div>
-          </InfoWindow>
-        )}
-      </GoogleMap>
+            </InfoWindow>
+          )}
+        </GoogleMap>
+      </div>
     </div>
   );
 }

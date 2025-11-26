@@ -13,9 +13,18 @@ export async function POST(request: NextRequest) {
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
       };
 
+      // Declare variables outside try block for error handling
+      const allResults: any[] = [];
+      let images: Array<{ path: string; url?: string; filename: string; date: string; cameraType: string }> = [];
+      let checkpointPath: string | null = null;
+      let date: string = '';
+      let cameraType: string | undefined = undefined;
+
       try {
         const body = await request.json();
-        const { date, cameraType, imagePaths, analysisTypes } = body;
+        date = body.date;
+        cameraType = body.cameraType;
+        const { imagePaths, analysisTypes } = body;
 
         if (!date) {
           send({ type: 'error', message: 'Date is required' });
@@ -24,8 +33,6 @@ export async function POST(request: NextRequest) {
         }
 
         send({ type: 'start', message: 'Starting analysis...' });
-
-        let images: Array<{ path: string; url?: string; filename: string; date: string; cameraType: string }> = [];
 
         if (imagePaths && Array.isArray(imagePaths)) {
           // Get signed URLs for selected images
@@ -64,45 +71,182 @@ export async function POST(request: NextRequest) {
         send({ type: 'log', message: `Found ${images.length} images to analyze` });
         send({ type: 'progress', current: 0, total: images.length });
 
-        // Collect all results for saving
-        const allResults: any[] = [];
+        // Incremental save configuration
+        let lastSaveTime = Date.now();
+        const SAVE_INTERVAL = 30 * 1000; // Save every 30 seconds
+        const SAVE_BATCH_SIZE = 10; // Save every 10 images
+        let savedPath: string | null = null;
+
+        // Helper function to save results incrementally
+        const saveIncremental = async (isFinal: boolean = false) => {
+          if (allResults.length === 0) return null;
+          
+          try {
+            // For incremental saves, use checkpoint path. For final, update the checkpoint
+            const pathToUse = checkpointPath || (isFinal ? null : null);
+            const savePath = await saveAnalysisResults(
+              allResults,
+              {
+                date,
+                cameraType: cameraType || undefined,
+                totalImages: images.length,
+              },
+              pathToUse // Pass existing path to update it
+            );
+            
+            if (!checkpointPath) {
+              checkpointPath = savePath;
+            }
+            
+            if (isFinal) {
+              savedPath = savePath;
+            }
+            
+            send({ 
+              type: 'log', 
+              message: isFinal 
+                ? `✅ Final results saved: ${allResults.length}/${images.length} images → ${savePath}` 
+                : `💾 Checkpoint saved: ${allResults.length}/${images.length} images → ${savePath}` 
+            });
+            
+            return savePath;
+          } catch (saveError) {
+            console.error('Error saving results to GCP:', saveError);
+            send({ type: 'log', message: `⚠️ Warning: Failed to save ${isFinal ? 'final' : 'checkpoint'} results` });
+            throw saveError;
+          }
+        };
+
+        // Keep-alive ping to prevent connection timeout
+        const keepAliveInterval = setInterval(() => {
+          try {
+            send({ type: 'ping', timestamp: Date.now() });
+          } catch (e) {
+            // Connection closed, clear interval
+            clearInterval(keepAliveInterval);
+          }
+        }, 10000); // Ping every 10 seconds
 
         // Analyze with progress updates
-        await analyzeImages(images, (current, total, result) => {
-          send({ type: 'progress', current, total });
-          
-          if (result) {
-            allResults.push(result);
-            send({ type: 'image_processed', result });
-            
-            // Check if any prompt matched
-            const hasMatch = result.results.some(r => r.match);
-            if (hasMatch) {
-              send({ type: 'match', result });
-            }
-          }
-        }, analysisTypes);
-
-        // Save results to GCP
-        let savedPath = null;
         try {
-          send({ type: 'log', message: 'Saving results to GCP...' });
-          savedPath = await saveAnalysisResults(allResults, {
-            date,
-            cameraType: cameraType || undefined,
-            totalImages: images.length,
-          });
-          send({ type: 'log', message: `Results saved to: ${savedPath}` });
-        } catch (saveError) {
-          console.error('Error saving results to GCP:', saveError);
-          send({ type: 'log', message: 'Warning: Failed to save results to GCP' });
+          await analyzeImages(images, (current, total, result) => {
+            try {
+              send({ type: 'progress', current, total });
+              
+              if (result) {
+                allResults.push(result);
+                send({ type: 'image_processed', result });
+                
+                // Check if any prompt matched
+                const hasMatch = result.results.some(r => r.match);
+                if (hasMatch) {
+                  send({ type: 'match', result });
+                }
+
+                // Save incrementally: every N images or every 30 seconds
+                const shouldSave = 
+                  allResults.length % SAVE_BATCH_SIZE === 0 || 
+                  (Date.now() - lastSaveTime) >= SAVE_INTERVAL;
+                
+                if (shouldSave && allResults.length > 0) {
+                  lastSaveTime = Date.now();
+                  // Save in background (don't await to avoid blocking)
+                  saveIncremental(false).catch(err => {
+                    console.error('Error in incremental save (non-blocking):', err);
+                    // Don't throw - allow processing to continue
+                  });
+                }
+
+                // Log memory usage periodically
+                if (current % 50 === 0 && typeof process !== 'undefined' && process.memoryUsage) {
+                  const memUsage = process.memoryUsage();
+                  const memMB = (memUsage.heapUsed / 1024 / 1024).toFixed(2);
+                  console.log(`📊 Memory usage at image ${current}: ${memMB}MB`);
+                  send({ type: 'log', message: `Memory: ${memMB}MB` });
+                }
+              }
+            } catch (sendError) {
+              console.error('Error sending progress update:', sendError);
+              // Continue processing even if send fails
+            }
+          }, analysisTypes);
+
+          // Clear keep-alive interval on completion
+          clearInterval(keepAliveInterval);
+
+          // Final save
+          await saveIncremental(true);
+        } catch (analysisError) {
+          // Clear keep-alive on error
+          clearInterval(keepAliveInterval);
+          
+          // If analysis fails, try to save what we have
+          console.error('❌ Analysis error at image', allResults.length, ':', analysisError);
+          console.error('Error stack:', analysisError instanceof Error ? analysisError.stack : 'No stack');
+          
+          if (allResults.length > 0) {
+            try {
+              const partialPath = await saveIncremental(true);
+              send({ type: 'log', message: `💾 Partial results saved: ${allResults.length}/${images.length} images → ${partialPath}` });
+              send({ type: 'error', message: `Analysis stopped at image ${allResults.length}. Partial results saved.` });
+            } catch (saveError) {
+              console.error('❌ Failed to save partial results:', saveError);
+              send({ type: 'error', message: `Analysis failed and could not save results. Error: ${saveError instanceof Error ? saveError.message : 'Unknown'}` });
+            }
+          } else {
+            send({ type: 'error', message: `Analysis failed before any results were generated. Error: ${analysisError instanceof Error ? analysisError.message : 'Unknown'}` });
+          }
+          throw analysisError; // Re-throw to trigger error handler
         }
 
         send({ type: 'complete', message: 'Analysis complete', savedPath });
         controller.close();
       } catch (error) {
-        send({ type: 'error', message: error instanceof Error ? error.message : 'Unknown error' });
-        controller.close();
+        console.error('❌ Stream error:', error);
+        console.error('Error stack:', error instanceof Error ? error.stack : 'No stack');
+        console.error('Results collected:', allResults.length, 'images');
+        console.error('Checkpoint path:', checkpointPath);
+        
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        
+        try {
+          send({ type: 'error', message: errorMessage });
+        } catch (sendErr) {
+          console.error('Failed to send error message (connection may be closed):', sendErr);
+        }
+        
+        // Try to save partial results even on error
+        if (allResults && allResults.length > 0) {
+          try {
+            console.log(`💾 Attempting to save ${allResults.length} partial results...`);
+            const partialPath = await saveAnalysisResults(
+              allResults,
+              {
+                date,
+                cameraType: cameraType || undefined,
+                totalImages: images.length,
+              },
+              checkpointPath
+            );
+            console.log(`✅ Partial results saved: ${partialPath}`);
+            try {
+              send({ type: 'log', message: `💾 Partial results saved due to error: ${partialPath} (${allResults.length} images)` });
+            } catch (sendErr) {
+              // Connection closed, but results are saved
+            }
+          } catch (saveError) {
+            console.error('❌ Failed to save partial results on error:', saveError);
+            console.error('Save error stack:', saveError instanceof Error ? saveError.stack : 'No stack');
+          }
+        } else {
+          console.warn('⚠️ No results to save (allResults is empty)');
+        }
+        
+        try {
+          controller.close();
+        } catch (closeErr) {
+          console.error('Error closing controller:', closeErr);
+        }
       }
     },
   });

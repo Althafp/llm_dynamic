@@ -2,6 +2,21 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { ANALYSIS_PROMPTS } from '@/lib/analysis-prompts';
+import {
+  BarChart,
+  Bar,
+  LineChart,
+  Line,
+  PieChart,
+  Pie,
+  Cell,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from 'recharts';
 
 interface AnalyticsStats {
   totalImages: number;
@@ -124,74 +139,205 @@ export default function AnalyticsDashboard({ results }: AnalyticsDashboardProps)
     );
   }
 
+  const COLORS = ['#000000', '#4B5563', '#6B7280', '#9CA3AF', '#D1D5DB', '#E5E7EB'];
+
+  // Prepare chart data
+  const promptChartData = stats.byPrompt.map((p) => ({
+    name: p.promptName.length > 15 ? p.promptName.substring(0, 15) + '...' : p.promptName,
+    fullName: p.promptName,
+    matches: p.matches,
+    analyzed: p.totalAnalyzed,
+    matchRate: p.totalAnalyzed > 0 ? ((p.matches / p.totalAnalyzed) * 100).toFixed(1) : 0,
+  }));
+
+  const cameraTypeChartData = stats.byCameraType.map((type) => ({
+    name: type.cameraType,
+    count: type.count,
+    successful: type.successful,
+    failed: type.count - type.successful,
+  }));
+
+  const successPieData = [
+    { name: 'Successful', value: stats.successful, color: '#000000' },
+    { name: 'Failed', value: stats.failed, color: '#9CA3AF' },
+  ];
+
   return (
     <div className="bg-white border border-gray-300 rounded-lg p-6 shadow-sm space-y-6">
-      <div className="flex items-center gap-2 mb-4">
+      <div className="flex items-center gap-2 mb-6">
         <svg className="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
         </svg>
         <h2 className="text-2xl font-bold text-black">Analytics Dashboard</h2>
       </div>
       
-      {/* Overall Stats */}
+      {/* Overall Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-gray-50 border border-gray-300 p-4 rounded-lg">
-          <div className="text-2xl font-bold text-black">{stats.totalImages}</div>
-          <div className="text-sm text-gray-600">Total Images</div>
+        <div className="bg-gray-50 border border-gray-300 p-6 rounded-lg">
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-sm text-gray-600">Total Images</div>
+            <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+          </div>
+          <div className="text-3xl font-bold text-black">{stats.totalImages}</div>
         </div>
-        <div className="bg-gray-50 border border-gray-300 p-4 rounded-lg">
-          <div className="text-2xl font-bold text-black">{stats.successful}</div>
-          <div className="text-sm text-gray-600">Successful</div>
+        <div className="bg-gray-50 border border-gray-300 p-6 rounded-lg">
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-sm text-gray-600">Successful</div>
+            <svg className="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <div className="text-3xl font-bold text-black">{stats.successful}</div>
         </div>
-        <div className="bg-gray-50 border border-gray-300 p-4 rounded-lg">
-          <div className="text-2xl font-bold text-black">{stats.failed}</div>
-          <div className="text-sm text-gray-600">Failed</div>
-        </div>
-      </div>
-
-      {/* By Prompt */}
-      <div className="bg-gray-50 rounded-lg border border-gray-300 p-6">
-        <h3 className="text-xl font-semibold mb-4 text-black">Analysis by Prompt</h3>
-        <div className="space-y-3">
-          {stats.byPrompt.map((prompt) => (
-            <div key={prompt.promptId} className="border-b border-gray-300 pb-3">
-              <div className="flex justify-between items-center mb-2">
-                <span className="font-medium text-black">{prompt.promptName}</span>
-                <span className="text-sm text-gray-600">
-                  {prompt.matches} matches / {prompt.totalAnalyzed} analyzed
-                </span>
-              </div>
-              <div className="flex gap-4 text-sm">
-                <span className="text-gray-600">
-                  Total Count: <span className="font-semibold text-black">{prompt.totalCount}</span>
-                </span>
-                <span className="text-gray-600">
-                  Average: <span className="font-semibold text-black">{prompt.averageCount.toFixed(2)}</span>
-                </span>
-              </div>
-              <div className="mt-2 bg-gray-200 rounded-full h-2">
-                <div
-                  className="bg-black h-2 rounded-full"
-                  style={{ width: `${(prompt.matches / prompt.totalAnalyzed) * 100}%` }}
-                />
-              </div>
-            </div>
-          ))}
+        <div className="bg-gray-50 border border-gray-300 p-6 rounded-lg">
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-sm text-gray-600">Failed</div>
+            <svg className="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <div className="text-3xl font-bold text-black">{stats.failed}</div>
         </div>
       </div>
 
-      {/* By Camera Type */}
+      {/* Charts Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Success Rate Pie Chart */}
+        <div className="bg-gray-50 rounded-lg border border-gray-300 p-6">
+          <h3 className="text-lg font-semibold mb-4 text-black">Success Rate</h3>
+          <ResponsiveContainer width="100%" height={300}>
+            <PieChart>
+              <Pie
+                data={successPieData}
+                cx="50%"
+                cy="50%"
+                labelLine={false}
+                label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                outerRadius={100}
+                fill="#8884d8"
+                dataKey="value"
+              >
+                {successPieData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={entry.color} />
+                ))}
+              </Pie>
+              <Tooltip />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Camera Type Bar Chart */}
+        <div className="bg-gray-50 rounded-lg border border-gray-300 p-6">
+          <h3 className="text-lg font-semibold mb-4 text-black">Analysis by Camera Type</h3>
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={cameraTypeChartData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+              <XAxis dataKey="name" stroke="#6B7280" />
+              <YAxis stroke="#6B7280" />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: '#fff',
+                  border: '1px solid #D1D5DB',
+                  borderRadius: '8px',
+                }}
+              />
+              <Legend />
+              <Bar dataKey="successful" fill="#000000" name="Successful" />
+              <Bar dataKey="failed" fill="#9CA3AF" name="Failed" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* Analysis by Prompt - Bar Chart */}
       <div className="bg-gray-50 rounded-lg border border-gray-300 p-6">
-        <h3 className="text-xl font-semibold mb-4 text-black">Analysis by Camera Type</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {stats.byCameraType.map((type) => (
-            <div key={type.cameraType} className="p-4 bg-white rounded-lg border border-gray-300">
-              <div className="font-semibold text-black">{type.cameraType}</div>
-              <div className="text-sm text-gray-600 mt-1">
-                {type.count} images • {type.successful} successful
-              </div>
-            </div>
-          ))}
+        <h3 className="text-lg font-semibold mb-4 text-black">Matches by Analysis Type</h3>
+        <ResponsiveContainer width="100%" height={400}>
+          <BarChart data={promptChartData} layout="vertical">
+            <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+            <XAxis type="number" stroke="#6B7280" />
+            <YAxis dataKey="name" type="category" width={150} stroke="#6B7280" />
+            <Tooltip
+              contentStyle={{
+                backgroundColor: '#fff',
+                border: '1px solid #D1D5DB',
+                borderRadius: '8px',
+              }}
+              formatter={(value: number, name: string) => {
+                if (name === 'matches') return [value, 'Matches'];
+                if (name === 'analyzed') return [value, 'Analyzed'];
+                return [value, name];
+              }}
+            />
+            <Legend />
+            <Bar dataKey="matches" fill="#000000" name="Matches" />
+            <Bar dataKey="analyzed" fill="#9CA3AF" name="Total Analyzed" />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* Match Rate Line Chart */}
+      <div className="bg-gray-50 rounded-lg border border-gray-300 p-6">
+        <h3 className="text-lg font-semibold mb-4 text-black">Match Rate by Analysis Type (%)</h3>
+        <ResponsiveContainer width="100%" height={300}>
+          <LineChart data={promptChartData}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+            <XAxis dataKey="name" stroke="#6B7280" angle={-45} textAnchor="end" height={100} />
+            <YAxis stroke="#6B7280" />
+            <Tooltip
+              contentStyle={{
+                backgroundColor: '#fff',
+                border: '1px solid #D1D5DB',
+                borderRadius: '8px',
+              }}
+              formatter={(value: string) => [`${value}%`, 'Match Rate']}
+            />
+            <Line
+              type="monotone"
+              dataKey="matchRate"
+              stroke="#000000"
+              strokeWidth={3}
+              dot={{ fill: '#000000', r: 5 }}
+              name="Match Rate (%)"
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* Detailed Prompt Stats Table */}
+      <div className="bg-gray-50 rounded-lg border border-gray-300 p-6">
+        <h3 className="text-lg font-semibold mb-4 text-black">Detailed Analysis by Prompt</h3>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-gray-300">
+                <th className="text-left py-3 px-4 font-semibold text-black">Analysis Type</th>
+                <th className="text-right py-3 px-4 font-semibold text-black">Total Analyzed</th>
+                <th className="text-right py-3 px-4 font-semibold text-black">Matches</th>
+                <th className="text-right py-3 px-4 font-semibold text-black">Match Rate</th>
+                <th className="text-right py-3 px-4 font-semibold text-black">Total Count</th>
+                <th className="text-right py-3 px-4 font-semibold text-black">Average</th>
+              </tr>
+            </thead>
+            <tbody>
+              {stats.byPrompt.map((prompt) => (
+                <tr key={prompt.promptId} className="border-b border-gray-200 hover:bg-gray-100">
+                  <td className="py-3 px-4 font-medium text-black">{prompt.promptName}</td>
+                  <td className="py-3 px-4 text-right text-gray-700">{prompt.totalAnalyzed}</td>
+                  <td className="py-3 px-4 text-right text-gray-700">{prompt.matches}</td>
+                  <td className="py-3 px-4 text-right text-gray-700">
+                    {prompt.totalAnalyzed > 0
+                      ? `${((prompt.matches / prompt.totalAnalyzed) * 100).toFixed(1)}%`
+                      : '0%'}
+                  </td>
+                  <td className="py-3 px-4 text-right text-gray-700">{prompt.totalCount}</td>
+                  <td className="py-3 px-4 text-right text-gray-700">{prompt.averageCount.toFixed(2)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

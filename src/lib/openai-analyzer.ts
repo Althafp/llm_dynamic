@@ -1,6 +1,7 @@
 import OpenAI from 'openai';
 import { getImageUrl, getImageAsBase64 } from './gcp-storage';
 import { ANALYSIS_PROMPTS, type AnalysisPrompt } from './analysis-prompts';
+import { withRateLimit } from './rate-limiter';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -119,30 +120,40 @@ async function analyzeImageWithPromptUsingUrl(
     console.log(`${logPrefix} [${prompt.name}] Trying signed URL (zero memory)...`);
     
     try {
-      const response = await openai.chat.completions.create({
-        model: 'gpt-4o',
-        messages: [
-          {
-            role: 'user',
-            content: [
-              { type: 'text', text: promptText },
-              {
-                type: 'image_url',
-                image_url: {
-                  url: signedUrl, // Direct GCS signed URL - OpenAI fetches directly
-                  detail: 'high',
+      // Use rate limiter to respect OpenAI's 500 RPM limit
+      const response = await withRateLimit(async () => {
+        return await openai.chat.completions.create({
+          model: 'gpt-4o',
+          messages: [
+            {
+              role: 'user',
+              content: [
+                { type: 'text', text: promptText },
+                {
+                  type: 'image_url',
+                  image_url: {
+                    url: signedUrl, // Direct GCS signed URL - OpenAI fetches directly
+                    detail: 'high',
+                  },
                 },
-              },
-            ],
-          },
-        ],
-        max_tokens: 1000,
-        temperature: 0.2,
-        response_format: { type: 'json_object' },
+              ],
+            },
+          ],
+          max_tokens: 1000,
+          temperature: 0.2,
+          response_format: { type: 'json_object' },
+        });
       });
       
       const apiTime = Date.now() - apiStartTime;
-      console.log(`${logPrefix} [${prompt.name}] ✅ Signed URL worked! API responded in ${apiTime}ms`);
+      
+      // Record token usage if available
+      if (response.usage) {
+        const { total_tokens, prompt_tokens, completion_tokens } = response.usage;
+        console.log(`${logPrefix} [${prompt.name}] ✅ Signed URL worked! API responded in ${apiTime}ms (Tokens: ${total_tokens} = ${prompt_tokens} prompt + ${completion_tokens} completion)`);
+      } else {
+        console.log(`${logPrefix} [${prompt.name}] ✅ Signed URL worked! API responded in ${apiTime}ms`);
+      }
 
       const content = response.choices[0]?.message?.content;
       if (!content) {
@@ -151,6 +162,12 @@ async function analyzeImageWithPromptUsingUrl(
 
       const parsed = JSON.parse(content);
       const result = parseAnalysisResponse(parsed);
+      
+      // Record token usage for rate limiter
+      if (response.usage?.total_tokens) {
+        const { recordTokenUsage } = await import('./rate-limiter');
+        recordTokenUsage(response.usage.total_tokens);
+      }
       
       const totalTime = Date.now() - promptStartTime;
       console.log(`${logPrefix} [${prompt.name}] ✅ Completed in ${totalTime}ms (API: ${apiTime}ms) - Match: ${result.match}, Count: ${result.count}`);
@@ -177,30 +194,40 @@ async function analyzeImageWithPromptUsingUrl(
         console.log(`${logPrefix} [${prompt.name}] Downloaded in ${downloadTime}ms, retrying with base64...`);
         
         const retryStartTime = Date.now();
-        const response = await openai.chat.completions.create({
-          model: 'gpt-4o',
-          messages: [
-            {
-              role: 'user',
-              content: [
-                { type: 'text', text: promptText },
-                {
-                  type: 'image_url',
-                  image_url: {
-                    url: base64, // Base64 fallback (reliable)
-                    detail: 'high',
+        // Use rate limiter for fallback request too
+        const response = await withRateLimit(async () => {
+          return await openai.chat.completions.create({
+            model: 'gpt-4o',
+            messages: [
+              {
+                role: 'user',
+                content: [
+                  { type: 'text', text: promptText },
+                  {
+                    type: 'image_url',
+                    image_url: {
+                      url: base64, // Base64 fallback (reliable)
+                      detail: 'high',
+                    },
                   },
-                },
-              ],
-            },
-          ],
-          max_tokens: 1000,
-          temperature: 0.2,
-          response_format: { type: 'json_object' },
+                ],
+              },
+            ],
+            max_tokens: 1000,
+            temperature: 0.2,
+            response_format: { type: 'json_object' },
+          });
         });
-        
+
         const retryTime = Date.now() - retryStartTime;
-        console.log(`${logPrefix} [${prompt.name}] ✅ Base64 fallback worked! API responded in ${retryTime}ms`);
+        
+        // Record token usage if available
+        if (response.usage) {
+          const { total_tokens, prompt_tokens, completion_tokens } = response.usage;
+          console.log(`${logPrefix} [${prompt.name}] ✅ Base64 fallback worked! API responded in ${retryTime}ms (Tokens: ${total_tokens} = ${prompt_tokens} prompt + ${completion_tokens} completion)`);
+        } else {
+          console.log(`${logPrefix} [${prompt.name}] ✅ Base64 fallback worked! API responded in ${retryTime}ms`);
+        }
 
         const content = response.choices[0]?.message?.content;
         if (!content) {
@@ -210,9 +237,15 @@ async function analyzeImageWithPromptUsingUrl(
         const parsed = JSON.parse(content);
         const result = parseAnalysisResponse(parsed);
         
+        // Record token usage for rate limiter
+        if (response.usage?.total_tokens) {
+          const { recordTokenUsage } = await import('./rate-limiter');
+          recordTokenUsage(response.usage.total_tokens);
+        }
+        
         const totalTime = Date.now() - promptStartTime;
         console.log(`${logPrefix} [${prompt.name}] ✅ Completed in ${totalTime}ms (Download: ${downloadTime}ms, API: ${retryTime}ms) - Match: ${result.match}, Count: ${result.count}`);
-        
+    
         return {
           ...result,
           promptId: prompt.id,
@@ -260,17 +293,20 @@ export async function analyzeImage(
     const urlTime = Date.now() - urlStartTime;
     console.log(`📸 [${filename}] Signed URL generated in ${urlTime}ms, now processing ${promptsToUse.length} prompts in parallel...`);
     console.log(`📸 [${filename}] URL format: ${signedUrl.substring(0, 100)}...`);
+        
+    // Process prompts SEQUENTIALLY to respect rate limits
+    // Rate limiter will ensure we don't exceed 500 RPM
+    // Each prompt waits for its turn in the rate limit queue
+    const results: AnalysisResult[] = [];
     
-    // Process all prompts in PARALLEL (not sequential!)
-    // All prompts use the same signed URL - OpenAI fetches directly from GCS
-    // If timeout, automatically falls back to base64 (reliable)
-    const promptPromises = promptsToUse.map(async (prompt) => {
+    for (const prompt of promptsToUse) {
       try {
-        return await analyzeImageWithPromptUsingUrl(signedUrl, imagePath, prompt, filename);
+        const result = await analyzeImageWithPromptUsingUrl(signedUrl, imagePath, prompt, filename);
+        results.push(result);
       } catch (error) {
         console.error(`📸 [${filename}] Failed to analyze with prompt ${prompt.id}:`, error);
         // Return error result instead of throwing
-        return {
+        results.push({
           promptId: prompt.id,
           promptName: prompt.name,
           match: false,
@@ -278,12 +314,9 @@ export async function analyzeImage(
           description: 'Analysis failed',
           details: error instanceof Error ? error.message : 'Unknown error',
           confidence: 'low' as const,
-        };
+        });
       }
-    });
-    
-    // Wait for all prompts to complete in parallel
-    const results = await Promise.all(promptPromises);
+    }
     
     const totalTime = Date.now() - imageStartTime;
     const matches = results.filter(r => r.match).length;
@@ -331,22 +364,38 @@ export async function analyzeImages(
   console.log(`🚀 Selected prompts: ${selectedPromptIds && selectedPromptIds.length > 0 ? selectedPromptIds.length : 'ALL'}`);
   console.log(`🚀 ========================================\n`);
   
-  // Process in batches of 5 (increased from 3 since we're more efficient now)
-  // Each image downloads once and processes prompts in parallel
-  const batchSize = 5;
-  const totalBatches = Math.ceil(total / batchSize);
+  // Process images with controlled parallelism to respect rate limits
+  // Rate limiter ensures we stay under 500 RPM (8 requests/second)
+  // Process 4 images concurrently, each processes prompts sequentially
+  // Rate limiter will queue API calls automatically to stay under limit
+  const promptsPerImage = selectedPromptIds?.length || ANALYSIS_PROMPTS.length;
+  const totalApiCalls = total * promptsPerImage;
+  const estimatedMinutes = Math.ceil(totalApiCalls / 480);
   
-  for (let i = 0; i < images.length; i += batchSize) {
-    const batchNumber = Math.floor(i / batchSize) + 1;
-    const batch = images.slice(i, i + batchSize);
+  console.log(`\n📊 Rate Limiting Configuration:`);
+  console.log(`📊   Max requests: 480/minute (8 requests/second)`);
+  console.log(`📊   Total API calls: ${totalApiCalls} (${total} images × ${promptsPerImage} prompts)`);
+  console.log(`📊   Estimated time: ~${estimatedMinutes} minutes`);
+  console.log(`📊   Processing: 4 images concurrently, prompts sequentially`);
+  console.log(`📊   Rate limiter will queue requests automatically\n`);
+  
+  const concurrentImages = 4; // Process 4 images at a time (rate limiter handles queuing)
+  const totalBatches = Math.ceil(total / concurrentImages);
+  
+  for (let i = 0; i < images.length; i += concurrentImages) {
+    const batchNumber = Math.floor(i / concurrentImages) + 1;
+    const batch = images.slice(i, i + concurrentImages);
     const batchStartTime = Date.now();
     
-    console.log(`\n📦 Batch ${batchNumber}/${totalBatches}: Processing ${batch.length} image(s) in parallel`);
-    console.log(`📦 Images: ${batch.map(img => img.filename).join(', ')}`);
+    console.log(`\n📦 Batch ${batchNumber}/${totalBatches}: Processing ${batch.length} image(s) concurrently`);
     
-    // Analyze images in parallel - each image downloads once and processes all prompts in parallel
-    const batchPromises = batch.map((image) => {
-      return analyzeImage(image.path, image.filename, image.date, image.cameraType, selectedPromptIds);
+    // Process batch images concurrently (rate limiter will queue API calls properly)
+    const batchPromises = batch.map(async (image, idx) => {
+      const imageNumber = i + idx + 1;
+      console.log(`📸 [${imageNumber}/${total}] Starting: ${image.filename}`);
+      const result = await analyzeImage(image.path, image.filename, image.date, image.cameraType, selectedPromptIds);
+      console.log(`📸 [${imageNumber}/${total}] Completed: ${image.filename}`);
+      return result;
     });
     
     const batchResults = await Promise.all(batchPromises);
@@ -354,19 +403,20 @@ export async function analyzeImages(
     
     const batchTime = Date.now() - batchStartTime;
     const successful = batchResults.filter(r => r.status === 'success').length;
+    const remainingImages = total - results.length;
+    const avgTimePerImage = results.length > 0 ? (Date.now() - overallStartTime) / results.length : 0;
+    const estimatedRemaining = (remainingImages * avgTimePerImage) / 1000 / 60;
+    
     console.log(`📦 Batch ${batchNumber}/${totalBatches} completed in ${(batchTime / 1000).toFixed(2)}s (${successful}/${batch.length} successful)`);
+    if (remainingImages > 0) {
+      console.log(`📦 Estimated remaining: ${estimatedRemaining.toFixed(1)} minutes`);
+    }
     
     // Report progress
     if (onProgress) {
       batchResults.forEach(result => {
         onProgress(results.length, total, result);
       });
-    }
-    
-    // Small delay between batches to avoid rate limits (reduced from 1s to 500ms)
-    if (i + batchSize < images.length) {
-      console.log(`⏳ Waiting 500ms before next batch...`);
-      await new Promise(resolve => setTimeout(resolve, 500));
     }
   }
   

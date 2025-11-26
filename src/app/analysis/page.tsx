@@ -229,41 +229,15 @@ function AnalysisPageContent() {
   };
 
   return (
-    <div className="min-h-screen bg-white">
-      <div className="w-full">
-        {/* Header */}
-        <div className="bg-black border-b border-gray-300 mb-8">
-          <div className="w-full mx-auto px-6 py-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <Link
-                  href="/"
-                  className="p-2 hover:bg-gray-800 rounded-lg transition-all"
-                >
-                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                  </svg>
-                </Link>
-                <div>
-                  <h1 className="text-3xl font-bold text-white">Image Analysis</h1>
-                  <p className="text-white/70 text-sm">Analyze CCTV images with GPT-4o Vision</p>
-                </div>
-              </div>
-              <Link
-                href="/results"
-                className="px-4 py-2 bg-white text-black rounded-lg font-medium hover:bg-gray-100 transition-all border border-gray-300 flex items-center gap-2"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                View Results
-              </Link>
-            </div>
-          </div>
-        </div>
+    <div className="min-h-screen bg-gray-50">
+      {/* Page Header */}
+      <div className="bg-white border-b border-gray-300 px-6 py-4">
+        <h1 className="text-2xl font-bold text-black">Image Analysis</h1>
+        <p className="text-sm text-gray-600 mt-1">Analyze CCTV images with GPT-4o Vision</p>
+      </div>
 
-        {/* Main Content */}
-        <div className="w-full px-6 pb-8 bg-gray-50">
+      {/* Main Content */}
+      <div className="p-6">
           {/* Filters Card */}
           <div className="bg-white border border-gray-300 rounded-lg p-6 mb-6 shadow-sm">
             <div className="flex items-center gap-2 mb-6">
@@ -528,7 +502,6 @@ function AnalysisPageContent() {
               </div>
             </>
           )}
-        </div>
       </div>
     </div>
   );

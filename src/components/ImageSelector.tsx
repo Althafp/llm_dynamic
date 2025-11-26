@@ -147,11 +147,11 @@ export default function ImageSelector({
           >
             {image.url && (
               <div className="relative w-full h-32 bg-gray-100 overflow-hidden">
-                <img
-                  src={image.url}
-                  alt={image.name}
+              <img
+                src={image.url}
+                alt={image.name}
                   className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-                />
+              />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
               </div>
             )}

@@ -57,8 +57,8 @@ A Next.js application for analyzing CCTV/traffic camera images stored in Google 
 ## Running the Application
 
 1. **Development mode:**
-   ```bash
-   npm run dev
+```bash
+npm run dev
    ```
 
 2. **Build for production:**

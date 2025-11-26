@@ -95,49 +95,15 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="min-h-screen bg-white">
-      <div className="w-full">
-        {/* Header */}
-        <div className="bg-black border-b border-gray-300">
-          <div className="w-full mx-auto px-6 py-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-gray-800 rounded-lg flex items-center justify-center border border-gray-600">
-                  <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                  </svg>
-                </div>
-                <div>
-                  <h1 className="text-2xl font-bold text-white">CCTV Analysis System</h1>
-                  <p className="text-sm text-gray-400">AI-Powered Image Analysis Dashboard</p>
-                </div>
-              </div>
-              <nav className="flex gap-3">
-                <Link
-                  href="/analysis"
-                  className="px-6 py-2.5 bg-gray-800 text-white rounded-lg font-semibold hover:bg-gray-700 transition-all border border-gray-600 flex items-center gap-2"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                  </svg>
-                  New Analysis
-                </Link>
-                <Link
-                  href="/results"
-                  className="px-6 py-2.5 bg-white text-black rounded-lg font-semibold hover:bg-gray-100 transition-all border border-gray-300 flex items-center gap-2"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  View Results
-                </Link>
-              </nav>
-            </div>
-          </div>
-        </div>
+    <div className="min-h-screen bg-gray-50">
+      {/* Page Header */}
+      <div className="bg-white border-b border-gray-300 px-6 py-4">
+        <h1 className="text-2xl font-bold text-black">Dashboard</h1>
+        <p className="text-sm text-gray-600 mt-1">Overview of your CCTV analysis system</p>
+      </div>
 
-        {/* Main Content */}
-        <div className="w-full mx-auto px-6 py-8 bg-gray-50">
+      {/* Main Content */}
+      <div className="p-6">
           {loading ? (
             <div className="flex items-center justify-center min-h-[60vh]">
               <div className="text-center">
@@ -324,7 +290,6 @@ export default function DashboardPage() {
               )}
             </div>
           )}
-        </div>
       </div>
     </div>
   );
