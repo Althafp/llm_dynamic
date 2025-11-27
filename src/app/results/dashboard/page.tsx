@@ -66,6 +66,7 @@ function ResultsDashboardContent() {
   const [loadingImages, setLoadingImages] = useState(false);
   const [matchedImages, setMatchedImages] = useState<MatchedImage[]>([]);
   const [locationMapping, setLocationMapping] = useState<Record<string, any>>({});
+  const [streamProgress, setStreamProgress] = useState<{ current: number; total: number; matched: number } | null>(null);
 
   useEffect(() => {
     const path = searchParams.get('path');
@@ -122,69 +123,82 @@ function ResultsDashboardContent() {
     
     setLoadingImages(true);
     setSubmitted(true);
+    setMatchedImages([]); // Clear previous results
     
     try {
-      const matched: MatchedImage[] = [];
-      
-      for (const result of selectedResult) {
-        // Find the result that matches the selected analysis type
-        const filteredResult = result.results.find(
-          (r: any) => r.promptId === selectedAnalysisType
-        );
-        
-        if (!filteredResult || !filteredResult.match) continue;
-        
-        const ip = extractIPFromFilename(result.filename);
-        let imageUrl: string | undefined;
-        
-        try {
-          const urlResponse = await fetch(`/api/images/url?path=${encodeURIComponent(result.imagePath)}`);
-          const urlData = await urlResponse.json();
-          if (urlData.success) {
-            imageUrl = urlData.url;
-          }
-        } catch (error) {
-          console.error('Error getting image URL:', error);
-        }
-        
-        // Get location details if IP exists
-        let locationDetails: LocationDetails | undefined;
-        if (ip && locationMapping[ip]) {
-          const loc = locationMapping[ip];
-          locationDetails = {
-            district: loc.district,
-            mandal: loc.mandal,
-            locationName: loc.locationName,
-            ip: ip,
-            cameraType: loc.cameraType,
-          };
-        }
-        
-        // Get analysis detail
-        const analysisDetail: AnalysisDetail = {
-          promptName: filteredResult.promptName,
-          match: filteredResult.match,
-          count: filteredResult.count,
-          description: filteredResult.description,
-          details: filteredResult.details,
-          confidence: filteredResult.confidence,
-          additionalObservations: filteredResult.additionalObservations,
-        };
-        
-        matched.push({
-          filename: result.filename,
-          imagePath: result.imagePath,
-          url: imageUrl,
-          ip: ip || undefined,
-          analysisTypes: [filteredResult.promptName],
-          locationDetails,
-          analysisDetail,
-        });
+      // Use streaming API for progressive loading
+      const response = await fetch('/api/results/filter', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          results: selectedResult,
+          selectedAnalysisType,
+          locationMapping,
+        }),
+      });
+
+      if (!response.body) {
+        throw new Error('No response body');
       }
-      
-      setMatchedImages(matched);
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      const allMatchedImages: MatchedImage[] = [];
+
+      while (true) {
+        const { done, value } = await reader.read();
+        
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n\n');
+        buffer = lines.pop() || ''; // Keep incomplete line in buffer
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              
+              if (data.type === 'start') {
+                setStreamProgress({ current: 0, total: data.total, matched: 0 });
+                console.log(`Processing ${data.total} results...`);
+              } else if (data.type === 'data') {
+                // Add new images progressively
+                allMatchedImages.push(...data.images);
+                setMatchedImages([...allMatchedImages]); // Update state to show progress
+                setStreamProgress({ 
+                  current: data.progress, 
+                  total: data.total || 0, 
+                  matched: data.matched 
+                });
+              } else if (data.type === 'progress') {
+                // Just update progress without adding images
+                setStreamProgress({ 
+                  current: data.progress, 
+                  total: data.total || 0, 
+                  matched: data.matched 
+                });
+                console.log(`Progress: ${data.progress}/${data.total || '?'} (${data.matched} matched)`);
+              } else if (data.type === 'complete') {
+                console.log(`Complete: ${data.matched} matched images found`);
+                setMatchedImages(allMatchedImages);
+                setStreamProgress(null);
+              } else if (data.type === 'error') {
+                setStreamProgress(null);
+                throw new Error(data.message || 'Unknown error');
+              }
+            } catch (parseError) {
+              console.error('Error parsing stream data:', parseError);
+            }
+          }
+        }
+      }
     } catch (error) {
       console.error('Error processing matched images:', error);
+      alert('Error loading filtered results. Please try again.');
     } finally {
       setLoadingImages(false);
     }
@@ -733,12 +747,26 @@ function ResultsDashboardContent() {
                 disabled={!selectedAnalysisType || loadingImages}
                 className="w-full px-6 py-3 bg-black text-white rounded-lg font-semibold hover:bg-gray-800 disabled:bg-gray-400 disabled:cursor-not-allowed transition-all shadow-sm border border-gray-600"
               >
-                {loadingImages ? 'Loading...' : 'Submit'}
+                {loadingImages ? (
+                  <div className="flex items-center justify-center gap-2">
+                    <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    {streamProgress ? (
+                      <span>Processing... {streamProgress.matched} matched ({streamProgress.current}/{streamProgress.total})</span>
+                    ) : (
+                      <span>Loading...</span>
+                    )}
+                  </div>
+                ) : (
+                  'Submit'
+                )}
               </button>
             </div>
 
-            {/* Results - Only show after submit */}
-            {submitted && !loadingImages && (
+            {/* Results - Show while loading (streaming) or after complete */}
+            {submitted && (
               <>
                 {/* Dashboard Stats */}
                 <div className="bg-white border border-gray-300 rounded-lg p-6 shadow-sm">

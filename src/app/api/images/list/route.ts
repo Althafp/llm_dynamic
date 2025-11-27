@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { listAvailableDates, listImages } from '@/lib/gcp-storage';
 
 export const runtime = 'nodejs';
+export const revalidate = 60; // Cache for 60 seconds
 
 export async function GET(request: NextRequest) {
   try {
@@ -16,18 +17,26 @@ export async function GET(request: NextRequest) {
 
     if (date) {
       // List images for specific date
+      // Check if URLs are needed (for analysis page, yes; for listing, no)
+      const generateUrls = searchParams.get('generateUrls') !== 'false';
       const images = await Promise.race([
-        listImages(date, cameraType || undefined),
+        listImages(date, cameraType || undefined, generateUrls),
         timeoutPromise,
       ]) as Awaited<ReturnType<typeof listImages>>;
-      return NextResponse.json({ success: true, images });
+      
+      const response = NextResponse.json({ success: true, images });
+      response.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
+      return response;
     } else {
       // List available dates
       const dates = await Promise.race([
         listAvailableDates(),
         timeoutPromise,
       ]) as Awaited<ReturnType<typeof listAvailableDates>>;
-      return NextResponse.json({ success: true, dates });
+      
+      const response = NextResponse.json({ success: true, dates });
+      response.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
+      return response;
     }
   } catch (error) {
     console.error('Error listing images:', error);

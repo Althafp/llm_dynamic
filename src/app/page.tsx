@@ -31,19 +31,22 @@ export default function DashboardPage() {
   const loadDashboardData = async () => {
     setLoading(true);
     try {
-      // Load available dates
-      const datesResponse = await fetch('/api/images/list');
-      const datesData = await datesResponse.json();
+      // Load both API calls in parallel for faster loading
+      const [datesResponse, resultsResponse] = await Promise.all([
+        fetch('/api/images/list', { cache: 'force-cache' }),
+        fetch('/api/results/list', { cache: 'force-cache' }),
+      ]);
+
+      const [datesData, resultsData] = await Promise.all([
+        datesResponse.json(),
+        resultsResponse.json(),
+      ]);
+
       if (datesData.success) {
         const dates = datesData.dates || [];
-        // We only need the list of available dates for the sidebar card
-        // No need to fetch images for every date here (keeps dashboard fast)
         setAvailableDates(dates);
       }
 
-      // Load analysis results for stats only
-      const resultsResponse = await fetch('/api/results/list');
-      const resultsData = await resultsResponse.json();
       if (resultsData.success) {
         const results = resultsData.results || [];
 
