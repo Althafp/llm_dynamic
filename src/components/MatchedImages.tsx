@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 
 interface LocationDetails {
   district?: string;
@@ -34,10 +35,62 @@ interface MatchedImagesProps {
   images: MatchedImage[];
   showLocationDetails?: boolean;
   showAnalysisDetails?: boolean;
+  resultPath?: string;
+  onImageDelete?: (imagePath: string) => void;
 }
 
-export default function MatchedImages({ images, showLocationDetails = false, showAnalysisDetails = false }: MatchedImagesProps) {
+export default function MatchedImages({ images, showLocationDetails = false, showAnalysisDetails = false, resultPath, onImageDelete }: MatchedImagesProps) {
+  const searchParams = useSearchParams();
   const [selectedImage, setSelectedImage] = useState<MatchedImage | null>(null);
+  const [deletingImage, setDeletingImage] = useState<string | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<MatchedImage | null>(null);
+
+  // Get resultPath from prop or URL as fallback
+  const effectiveResultPath = resultPath || searchParams.get('path') || '';
+
+  const handleDelete = async (image: MatchedImage, e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent card click
+    setShowDeleteConfirm(image);
+  };
+
+  const confirmDelete = async () => {
+    if (!showDeleteConfirm) return;
+    
+    if (!effectiveResultPath) {
+      alert('Result path is required to remove image record. Please refresh the page and try again.');
+      setShowDeleteConfirm(null);
+      return;
+    }
+    
+    const imagePath = showDeleteConfirm.imagePath;
+    setDeletingImage(imagePath);
+    setShowDeleteConfirm(null);
+
+    try {
+      const response = await fetch(
+        `/api/images/delete?imagePath=${encodeURIComponent(imagePath)}&resultPath=${encodeURIComponent(effectiveResultPath)}`,
+        {
+          method: 'DELETE',
+        }
+      );
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Call parent callback to remove image from list
+        if (onImageDelete) {
+          onImageDelete(imagePath);
+        }
+      } else {
+        alert(`Failed to remove image record: ${data.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error removing image record:', error);
+      alert('Failed to remove image record. Please try again.');
+    } finally {
+      setDeletingImage(null);
+    }
+  };
 
   if (images.length === 0) {
     return (
@@ -57,7 +110,7 @@ export default function MatchedImages({ images, showLocationDetails = false, sho
           {images.map((image, idx) => (
             <div
               key={idx}
-              className="border border-gray-300 rounded-lg overflow-hidden bg-white cursor-pointer hover:border-gray-500 hover:shadow-md transition-all"
+              className="border border-gray-300 rounded-lg overflow-hidden bg-white cursor-pointer hover:border-gray-500 hover:shadow-md transition-all relative"
               onClick={() => setSelectedImage(image)}
             >
               {image.url && (
@@ -67,6 +120,24 @@ export default function MatchedImages({ images, showLocationDetails = false, sho
                     alt={image.filename}
                     className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
                   />
+                  {/* Delete Button Overlay */}
+                  <button
+                    onClick={(e) => handleDelete(image, e)}
+                    disabled={deletingImage === image.imagePath}
+                    className="absolute top-2 right-2 p-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-all shadow-lg z-10"
+                    title="Delete image"
+                  >
+                    {deletingImage === image.imagePath ? (
+                      <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                    ) : (
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    )}
+                  </button>
                 </div>
               )}
               <div className="p-4">
@@ -255,6 +326,39 @@ export default function MatchedImages({ images, showLocationDetails = false, sho
                   ))}
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+          onClick={() => setShowDeleteConfirm(null)}
+        >
+          <div
+            className="bg-white rounded-lg max-w-md w-full p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-semibold text-gray-800 mb-2">Delete Image</h3>
+            <p className="text-gray-600 mb-4">
+              Are you sure you want to remove <strong>{showDeleteConfirm.filename}</strong> from this analysis result? The image will remain in storage, but this detection record will be removed.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setShowDeleteConfirm(null)}
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDelete}
+                disabled={deletingImage === showDeleteConfirm.imagePath}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-all"
+              >
+                {deletingImage === showDeleteConfirm.imagePath ? 'Deleting...' : 'Delete'}
+              </button>
             </div>
           </div>
         </div>

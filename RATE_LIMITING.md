@@ -80,3 +80,4 @@ const concurrentImages = 4; // Adjust this (higher = faster but more queuing)
 
 **Note**: Higher concurrency doesn't mean faster if rate limit is the bottleneck. The rate limiter will queue requests anyway.
 
+

@@ -23,7 +23,6 @@ export default function DashboardPage() {
   });
   const [loading, setLoading] = useState(true);
   const [availableDates, setAvailableDates] = useState<string[]>([]);
-  const [recentResults, setRecentResults] = useState<any[]>([]);
 
   useEffect(() => {
     loadDashboardData();
@@ -42,12 +41,11 @@ export default function DashboardPage() {
         setAvailableDates(dates);
       }
 
-      // Load recent analysis results
+      // Load analysis results for stats only
       const resultsResponse = await fetch('/api/results/list');
       const resultsData = await resultsResponse.json();
       if (resultsData.success) {
         const results = resultsData.results || [];
-        setRecentResults(results.slice(0, 5)); // Last 5
 
         // Total Locations = maximum images processed in any single analysis run
         const totalLocations = results.reduce(
@@ -208,55 +206,6 @@ export default function DashboardPage() {
                   </div>
                 </div>
               </div>
-
-              {/* Recent Results */}
-              {recentResults.length > 0 && (
-                <div className="bg-white rounded-lg p-6 border border-gray-300 shadow-sm">
-                  <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-xl font-bold text-black flex items-center gap-2">
-                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      Recent Analyses
-                    </h2>
-                    <Link
-                      href="/results"
-                      className="text-sm text-gray-600 hover:text-black font-medium"
-                    >
-                      View All →
-                    </Link>
-                  </div>
-                  <div className="space-y-3">
-                    {recentResults.map((result, idx) => (
-                      <div
-                        key={idx}
-                        className="p-4 bg-gray-50 rounded-lg border border-gray-300 hover:bg-gray-100 transition-all cursor-pointer"
-                        onClick={() => router.push(`/results?path=${encodeURIComponent(result.path)}`)}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="text-black font-medium mb-1">
-                              {new Date(result.created).toLocaleString()}
-                            </div>
-                            <div className="text-sm text-gray-600">
-                              {result.date} • {result.cameraType} • {result.totalImages} images
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <div className="text-right">
-                              <div className="text-gray-800 font-semibold">{result.successful}</div>
-                              <div className="text-xs text-gray-500">success</div>
-                            </div>
-                            <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                            </svg>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
           )}
       </div>

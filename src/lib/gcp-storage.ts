@@ -331,3 +331,29 @@ export async function getPreviousResult(resultPath: string): Promise<any> {
   return JSON.parse(buffer.toString());
 }
 
+/**
+ * Delete an image from GCS
+ */
+export async function deleteImage(imagePath: string): Promise<boolean> {
+  try {
+    const client = getStorageClient();
+    const bucket = client.bucket(BUCKET_NAME);
+    const file = bucket.file(imagePath);
+    
+    // Check if file exists
+    const [exists] = await file.exists();
+    if (!exists) {
+      console.warn(`Image not found: ${imagePath}`);
+      return false;
+    }
+    
+    // Delete the file
+    await file.delete();
+    console.log(`✅ Image deleted: ${imagePath}`);
+    return true;
+  } catch (error) {
+    console.error(`❌ Error deleting image ${imagePath}:`, error);
+    throw error;
+  }
+}
+

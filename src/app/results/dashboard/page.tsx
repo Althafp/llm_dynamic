@@ -52,6 +52,7 @@ function ResultsDashboardContent() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [selectedResult, setSelectedResult] = useState<AnalysisResult[]>([]);
+  const [resultPath, setResultPath] = useState<string>('');
   const [resultMetadata, setResultMetadata] = useState<{
     timestamp?: string;
     date?: string;
@@ -69,6 +70,7 @@ function ResultsDashboardContent() {
   useEffect(() => {
     const path = searchParams.get('path');
     if (path) {
+      setResultPath(path); // Set resultPath immediately from URL
       loadResult(path);
     } else {
       setLoading(false);
@@ -78,6 +80,7 @@ function ResultsDashboardContent() {
   const loadResult = async (path: string) => {
     setLoading(true);
     try {
+      setResultPath(path); // Store the result path for deletion
       const response = await fetch(`/api/results/get?path=${encodeURIComponent(path)}`);
       const data = await response.json();
       if (data.success && data.result) {
@@ -781,6 +784,13 @@ function ResultsDashboardContent() {
                     images={matchedImages} 
                     showLocationDetails={true}
                     showAnalysisDetails={true}
+                    resultPath={resultPath}
+                    onImageDelete={(imagePath) => {
+                      // Remove deleted image from the list
+                      setMatchedImages(prev => prev.filter(img => img.imagePath !== imagePath));
+                      // Also remove from selectedResult to keep data in sync
+                      setSelectedResult(prev => prev.filter(r => r.imagePath !== imagePath));
+                    }}
                   />
                 )}
 
