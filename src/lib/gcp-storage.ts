@@ -385,12 +385,44 @@ export async function listPreviousResults(): Promise<PreviousResult[]> {
         
         // Check if metadata has the values we need
         if (customMetadata.totalImages || customMetadata.date) {
-          date = customMetadata.date || 'unknown';
-          cameraType = customMetadata.cameraType || 'all';
-          totalImages = customMetadata.totalImages ? parseInt(customMetadata.totalImages, 10) : 0;
-          successful = customMetadata.successful ? parseInt(customMetadata.successful, 10) : 0;
-          failed = customMetadata.failed ? parseInt(customMetadata.failed, 10) : 0;
-          created = customMetadata.timestamp || fileMetadata.updated || '';
+          const metadataDate = customMetadata.date;
+          const metadataCamera = customMetadata.cameraType;
+          const metadataTimestamp = customMetadata.timestamp;
+          const metadataTotal = customMetadata.totalImages;
+          const metadataSuccessful = customMetadata.successful;
+          const metadataFailed = customMetadata.failed;
+
+          if (typeof metadataDate === 'string' && metadataDate.trim().length > 0) {
+            date = metadataDate;
+          }
+
+          if (typeof metadataCamera === 'string' && metadataCamera.trim().length > 0) {
+            cameraType = metadataCamera;
+          }
+
+          if (typeof metadataTimestamp === 'string' && metadataTimestamp.trim().length > 0) {
+            created = metadataTimestamp;
+          } else {
+            created = fileMetadata.updated || '';
+          }
+
+          if (typeof metadataTotal === 'string') {
+            totalImages = parseInt(metadataTotal, 10);
+          } else if (typeof metadataTotal === 'number') {
+            totalImages = metadataTotal;
+          }
+
+          if (typeof metadataSuccessful === 'string') {
+            successful = parseInt(metadataSuccessful, 10);
+          } else if (typeof metadataSuccessful === 'number') {
+            successful = metadataSuccessful;
+          }
+
+          if (typeof metadataFailed === 'string') {
+            failed = parseInt(metadataFailed, 10);
+          } else if (typeof metadataFailed === 'number') {
+            failed = metadataFailed;
+          }
           
           // If we got valid data from metadata, use it (fastest path)
           if (totalImages > 0 || successful > 0 || failed > 0) {
