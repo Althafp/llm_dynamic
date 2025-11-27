@@ -305,6 +305,12 @@ export async function saveAnalysisResults(
   
   // Upload to GCP (overwrites if exists)
   const file = bucket.file(resultPath);
+  
+  // Ensure we have valid summary values
+  const summaryTotal = resultData.summary?.total || results.length || 0;
+  const summarySuccessful = resultData.summary?.successful || 0;
+  const summaryFailed = resultData.summary?.failed || 0;
+  
   await file.save(JSON.stringify(resultData, null, 2), {
     contentType: 'application/json',
     metadata: {
@@ -312,13 +318,15 @@ export async function saveAnalysisResults(
         timestamp: now.toISOString(),
         date: metadata?.date || 'unknown',
         cameraType: metadata?.cameraType || 'all',
-        totalImages: String(resultData.summary.total || 0),
-        successful: String(resultData.summary.successful || 0),
-        failed: String(resultData.summary.failed || 0),
+        totalImages: String(summaryTotal),
+        successful: String(summarySuccessful),
+        failed: String(summaryFailed),
         isPartial: existingPath ? 'true' : 'false',
       },
     },
   });
+  
+  console.log(`✅ Saved results: totalImages=${summaryTotal}, successful=${summarySuccessful}, failed=${summaryFailed}`);
   
   const saveType = existingPath ? 'Checkpoint' : 'Results';
   console.log(`${saveType} saved to: ${resultPath} (${results.length} images)`);
@@ -363,8 +371,49 @@ export async function listPreviousResults(): Promise<PreviousResult[]> {
     if (!match) return null;
     
     try {
-      // FAST PATH: Try to read only first 2KB of file to get metadata (streaming)
-      // This is much faster than downloading entire file or calling getMetadata()
+      // FIRST: Try to get metadata from file metadata (fastest - no download needed)
+      let date = 'unknown';
+      let cameraType = 'all';
+      let totalImages = 0;
+      let successful = 0;
+      let failed = 0;
+      let created = '';
+      
+      try {
+        const [fileMetadata] = await file.getMetadata();
+        const customMetadata = fileMetadata.metadata || {};
+        
+        // Check if metadata has the values we need
+        if (customMetadata.totalImages || customMetadata.date) {
+          date = customMetadata.date || 'unknown';
+          cameraType = customMetadata.cameraType || 'all';
+          totalImages = customMetadata.totalImages ? parseInt(customMetadata.totalImages, 10) : 0;
+          successful = customMetadata.successful ? parseInt(customMetadata.successful, 10) : 0;
+          failed = customMetadata.failed ? parseInt(customMetadata.failed, 10) : 0;
+          created = customMetadata.timestamp || fileMetadata.updated || '';
+          
+          // If we got valid data from metadata, use it (fastest path)
+          if (totalImages > 0 || successful > 0 || failed > 0) {
+            return {
+              timestamp: match[1],
+              path: file.name,
+              date,
+              cameraType,
+              totalImages,
+              successful,
+              failed,
+              created,
+            };
+          }
+        }
+        created = fileMetadata.updated || '';
+      } catch (metadataError) {
+        // If metadata read fails, continue to file download
+        console.warn(`Could not read file metadata for ${file.name}:`, metadataError);
+      }
+      
+      // FALLBACK: Try to read only first 2KB of file to get metadata (streaming)
+      // This is much faster than downloading entire file
       const fileStream = file.createReadStream({ start: 0, end: 2048 });
       const chunks: Buffer[] = [];
       
@@ -378,45 +427,90 @@ export async function listPreviousResults(): Promise<PreviousResult[]> {
       
       // Try to extract metadata from partial JSON (usually in first 2KB)
       // Look for metadata and summary sections
-      let date = 'unknown';
-      let cameraType = 'all';
-      let totalImages = 0;
-      let successful = 0;
-      let failed = 0;
-      let created = file.metadata.updated || '';
+      // (date, cameraType, created already set from metadata attempt above)
       
-      // Try to parse partial JSON
+      // Try to parse partial JSON - first try full JSON parse, then regex fallback
       try {
-        // Find metadata section
-        const metadataMatch = partialContent.match(/"metadata"\s*:\s*\{[^}]*"date"\s*:\s*"([^"]+)"/);
-        if (metadataMatch) date = metadataMatch[1];
+        // Try to parse as complete JSON first (if we got enough content)
+        let parsedData: any = null;
+        try {
+          const jsonStart = partialContent.indexOf('{');
+          const jsonEnd = partialContent.lastIndexOf('}');
+          if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
+            const jsonStr = partialContent.substring(jsonStart, jsonEnd + 1);
+            parsedData = JSON.parse(jsonStr);
+          }
+        } catch (jsonError) {
+          // JSON parse failed, will use regex fallback
+        }
         
-        const cameraTypeMatch = partialContent.match(/"metadata"\s*:\s*\{[^}]*"cameraType"\s*:\s*"([^"]+)"/);
-        if (cameraTypeMatch) cameraType = cameraTypeMatch[1];
+        if (parsedData && parsedData.summary) {
+          // Use parsed JSON (most reliable)
+          date = parsedData.metadata?.date || 'unknown';
+          cameraType = parsedData.metadata?.cameraType || 'all';
+          totalImages = parsedData.summary?.total || 0;
+          successful = parsedData.summary?.successful || 0;
+          failed = parsedData.summary?.failed || 0;
+          created = parsedData.timestamp || file.metadata.updated || '';
+        } else {
+          // Fallback to regex parsing for partial content
+          const metadataDateMatch = partialContent.match(/"metadata"\s*:\s*\{[\s\S]*?"date"\s*:\s*"([^"]+)"/);
+          if (metadataDateMatch) date = metadataDateMatch[1];
+          
+          const metadataCameraMatch = partialContent.match(/"metadata"\s*:\s*\{[\s\S]*?"cameraType"\s*:\s*"([^"]+)"/);
+          if (metadataCameraMatch) cameraType = metadataCameraMatch[1];
+          
+          // Find summary section - use non-greedy matching
+          const summaryTotalMatch = partialContent.match(/"summary"\s*:\s*\{[\s\S]*?"total"\s*:\s*(\d+)/);
+          if (summaryTotalMatch) totalImages = parseInt(summaryTotalMatch[1], 10);
+          
+          const summarySuccessfulMatch = partialContent.match(/"summary"\s*:\s*\{[\s\S]*?"successful"\s*:\s*(\d+)/);
+          if (summarySuccessfulMatch) successful = parseInt(summarySuccessfulMatch[1], 10);
+          
+          const summaryFailedMatch = partialContent.match(/"summary"\s*:\s*\{[\s\S]*?"failed"\s*:\s*(\d+)/);
+          if (summaryFailedMatch) failed = parseInt(summaryFailedMatch[1], 10);
+          
+          const timestampMatch = partialContent.match(/"timestamp"\s*:\s*"([^"]+)"/);
+          if (timestampMatch) created = timestampMatch[1];
+        }
         
-        // Find summary section
-        const summaryMatch = partialContent.match(/"summary"\s*:\s*\{[^}]*"total"\s*:\s*(\d+)/);
-        if (summaryMatch) totalImages = parseInt(summaryMatch[1], 10);
-        
-        const successfulMatch = partialContent.match(/"summary"\s*:\s*\{[^}]*"successful"\s*:\s*(\d+)/);
-        if (successfulMatch) successful = parseInt(successfulMatch[1], 10);
-        
-        const failedMatch = partialContent.match(/"summary"\s*:\s*\{[^}]*"failed"\s*:\s*(\d+)/);
-        if (failedMatch) failed = parseInt(failedMatch[1], 10);
-        
-        const timestampMatch = partialContent.match(/"timestamp"\s*:\s*"([^"]+)"/);
-        if (timestampMatch) created = timestampMatch[1];
+        // If we still couldn't extract summary, download full file
+        // But also check if metadata.totalImages exists (newer format)
+        if (totalImages === 0 && successful === 0 && failed === 0) {
+          // Try to get from metadata.totalImages first (stored in file metadata)
+          const metadataTotal = parsedData?.metadata?.totalImages;
+          if (metadataTotal) {
+            totalImages = typeof metadataTotal === 'string' ? parseInt(metadataTotal, 10) : metadataTotal;
+          }
+          
+          // If still 0, download full file
+          if (totalImages === 0 && successful === 0 && failed === 0) {
+            console.warn(`Could not extract summary from partial content for ${file.name}, downloading full file...`);
+            const [buffer] = await file.download();
+            const data = JSON.parse(buffer.toString());
+            date = data.metadata?.date || date;
+            cameraType = data.metadata?.cameraType || cameraType;
+            totalImages = data.summary?.total || data.metadata?.totalImages || 0;
+            successful = data.summary?.successful || 0;
+            failed = data.summary?.failed || 0;
+            created = data.timestamp || created;
+          }
+        }
       } catch (parseError) {
         // If partial parse fails, fall back to full download (rare)
         console.warn(`Partial parse failed for ${file.name}, downloading full file...`);
-        const [buffer] = await file.download();
-        const data = JSON.parse(buffer.toString());
-        date = data.metadata?.date || 'unknown';
-        cameraType = data.metadata?.cameraType || 'all';
-        totalImages = data.summary?.total || 0;
-        successful = data.summary?.successful || 0;
-        failed = data.summary?.failed || 0;
-        created = data.timestamp || file.metadata.updated || '';
+        try {
+          const [buffer] = await file.download();
+          const data = JSON.parse(buffer.toString());
+          date = data.metadata?.date || 'unknown';
+          cameraType = data.metadata?.cameraType || 'all';
+          totalImages = data.summary?.total || 0;
+          successful = data.summary?.successful || 0;
+          failed = data.summary?.failed || 0;
+          created = data.timestamp || file.metadata.updated || '';
+        } catch (downloadError) {
+          console.error(`Error downloading full file ${file.name}:`, downloadError);
+        }
       }
       
       return {

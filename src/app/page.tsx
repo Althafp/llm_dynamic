@@ -49,12 +49,27 @@ export default function DashboardPage() {
 
       if (resultsData.success) {
         const results = resultsData.results || [];
+        
+        // Debug: Log results to see what we're getting
+        console.log('Dashboard results:', results.slice(0, 3).map((r: any) => ({
+          date: r.date,
+          totalImages: r.totalImages,
+          successful: r.successful,
+        })));
 
         // Total Locations = maximum images processed in any single analysis run
         const totalLocations = results.reduce(
-          (max: number, r: any) => Math.max(max, r.totalImages || 0),
+          (max: number, r: any) => {
+            const total = r.totalImages || 0;
+            if (total > max) {
+              console.log(`Found higher total: ${total} from ${r.date} (${r.path})`);
+            }
+            return Math.max(max, total);
+          },
           0
         );
+        
+        console.log('Calculated totalLocations:', totalLocations, 'from', results.length, 'results');
 
         setStats(prev => ({
           ...prev,
