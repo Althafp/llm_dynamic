@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import { ANALYSIS_PROMPTS } from '@/lib/analysis-prompts';
+import { AnalysisPrompt } from '@/lib/analysis-prompts';
 import {
   BarChart,
   Bar,
@@ -43,49 +43,103 @@ interface AnalyticsDashboardProps {
 }
 
 export default function AnalyticsDashboard({ results }: AnalyticsDashboardProps) {
+  const [allPrompts, setAllPrompts] = useState<AnalysisPrompt[]>([]);
+  const [loadingPrompts, setLoadingPrompts] = useState(true);
+
+  // Fetch all prompts (default + custom) from API
+  useEffect(() => {
+    const loadAllPrompts = async () => {
+      try {
+        const response = await fetch('/api/prompts/all');
+        const data = await response.json();
+        if (data.success && data.prompts) {
+          setAllPrompts(data.prompts);
+        }
+      } catch (error) {
+        console.error('Error loading prompts:', error);
+      } finally {
+        setLoadingPrompts(false);
+      }
+    };
+
+    loadAllPrompts();
+
+    // Refresh prompts when page becomes visible (user navigates back from prompts page)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        loadAllPrompts().catch(console.error);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
+
   // Compute analytics on the client side instead of making API call
   const stats = useMemo<AnalyticsStats | null>(() => {
-    if (!results || results.length === 0) return null;
+    if (!results || results.length === 0 || loadingPrompts || allPrompts.length === 0) return null;
 
     const totalImages = results.length;
     const successful = results.filter(r => r.status === 'success').length;
     const failed = results.filter(r => r.status === 'error').length;
 
-    // Group by prompt
+    // Group by prompt - first collect all unique prompt IDs from results
     const promptStats: Record<string, {
       totalAnalyzed: number;
       matches: number;
       totalCount: number;
+      promptName?: string;
     }> = {};
 
-    ANALYSIS_PROMPTS.forEach(prompt => {
+    // Initialize with all known prompts (default + custom)
+    allPrompts.forEach(prompt => {
       promptStats[prompt.id] = {
         totalAnalyzed: 0,
         matches: 0,
         totalCount: 0,
+        promptName: prompt.name,
       };
     });
 
+    // Process results and collect any unknown prompt IDs
     results.forEach(result => {
       if (result.results && Array.isArray(result.results)) {
         result.results.forEach((analysis: any) => {
           const promptId = analysis.promptId;
-          if (promptStats[promptId]) {
-            promptStats[promptId].totalAnalyzed++;
-            if (analysis.match) {
-              promptStats[promptId].matches++;
-              promptStats[promptId].totalCount += typeof analysis.count === 'number' ? analysis.count : 0;
-            }
+          if (!promptStats[promptId]) {
+            // If we encounter an unknown prompt ID, add it
+            promptStats[promptId] = {
+              totalAnalyzed: 0,
+              matches: 0,
+              totalCount: 0,
+              promptName: analysis.promptName || promptId,
+            };
+          }
+          promptStats[promptId].totalAnalyzed++;
+          if (analysis.match) {
+            promptStats[promptId].matches++;
+            promptStats[promptId].totalCount += typeof analysis.count === 'number' ? analysis.count : 0;
           }
         });
       }
     });
 
-    const byPrompt = ANALYSIS_PROMPTS.map(prompt => {
-      const stats = promptStats[prompt.id] || { totalAnalyzed: 0, matches: 0, totalCount: 0 };
+    // Build byPrompt array - include all prompts (even if they have no data)
+    // Also include any unknown prompts found in results
+    const promptMap = new Map<string, AnalysisPrompt>();
+    allPrompts.forEach(p => promptMap.set(p.id, p));
+
+    const byPrompt = Array.from(new Set([
+      ...allPrompts.map(p => p.id),
+      ...Object.keys(promptStats)
+    ])).map(promptId => {
+      const prompt = promptMap.get(promptId);
+      const stats = promptStats[promptId] || { totalAnalyzed: 0, matches: 0, totalCount: 0 };
       return {
-        promptId: prompt.id,
-        promptName: prompt.name,
+        promptId: promptId,
+        promptName: prompt?.name || stats.promptName || promptId,
         totalAnalyzed: stats.totalAnalyzed,
         matches: stats.matches,
         totalCount: stats.totalCount,
@@ -127,7 +181,21 @@ export default function AnalyticsDashboard({ results }: AnalyticsDashboardProps)
       byCameraType,
       byDate,
     };
-  }, [results]);
+  }, [results, allPrompts, loadingPrompts]);
+
+  if (loadingPrompts) {
+    return (
+      <div className="bg-white border border-gray-300 rounded-lg p-6 shadow-sm">
+        <div className="p-4 text-center text-gray-600">
+          <svg className="animate-spin h-6 w-6 text-gray-600 mx-auto mb-2" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          Loading analytics...
+        </div>
+      </div>
+    );
+  }
 
   if (!stats) {
     return (

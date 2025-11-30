@@ -78,16 +78,25 @@ export default function ResultsPage() {
   const [allPrompts, setAllPrompts] = useState<AnalysisPrompt[]>(ANALYSIS_PROMPTS);
 
   useEffect(() => {
+    // Load critical data first (results)
     loadPreviousResults();
-    loadLocationMapping();
-    loadAllPrompts();
+    loadAvailableDates(); // Load dates from images directory
+    
+    // Load non-critical data in parallel (don't block UI)
+    Promise.all([
+      loadLocationMapping(),
+      loadAllPrompts()
+    ]).catch(error => {
+      console.error('Error loading secondary data:', error);
+    });
   }, []);
 
   // Refresh prompts when page becomes visible (user navigates back from prompts page)
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        loadAllPrompts();
+        // Only refresh prompts, don't reload everything
+        loadAllPrompts().catch(console.error);
       }
     };
     
@@ -97,7 +106,11 @@ export default function ResultsPage() {
 
   const loadAllPrompts = async () => {
     try {
-      const response = await fetch('/api/prompts/all', { cache: 'no-store' });
+      // Use cache for faster loading, refresh in background if needed
+      const response = await fetch('/api/prompts/all', { 
+        cache: 'force-cache',
+        next: { revalidate: 300 } // Cache for 5 minutes
+      });
       const data = await response.json();
       if (data.success && data.prompts) {
         setAllPrompts(data.prompts);
@@ -111,7 +124,38 @@ export default function ResultsPage() {
 
   useEffect(() => {
     if (selectedDate) {
-      const filtered = results.filter(r => r.date === selectedDate);
+      // Filter results - extract date part (before underscore) and compare
+      // This handles both "2025-11-30" and "2025-11-30_CHITTOR" formats
+      const selectedDateOnly = selectedDate.split('_')[0];
+      
+      console.log(`🔍 Filtering by date: "${selectedDate}" (date part: "${selectedDateOnly}")`);
+      console.log(`🔍 Total results to filter: ${results.length}`);
+      
+      const filtered = results.filter(r => {
+        if (!r.date) {
+          console.log(`  ❌ Result has no date:`, r);
+          return false;
+        }
+        
+        // Exact match
+        if (r.date === selectedDate) {
+          console.log(`  ✅ Exact match: "${r.date}" === "${selectedDate}"`);
+          return true;
+        }
+        
+        // Extract date part from result date
+        const resultDateOnly = r.date.split('_')[0];
+        // Match if date parts are the same (handles "2025-11-30" vs "2025-11-30_CHITTOR")
+        if (resultDateOnly === selectedDateOnly) {
+          console.log(`  ✅ Date part match: "${resultDateOnly}" === "${selectedDateOnly}" (from "${r.date}")`);
+          return true;
+        }
+        
+        console.log(`  ❌ No match: "${r.date}" (date part: "${resultDateOnly}") vs "${selectedDate}" (date part: "${selectedDateOnly}")`);
+        return false;
+      });
+      
+      console.log(`🔍 Filtered results: ${filtered.length} out of ${results.length}`);
       setFilteredResults(filtered);
     } else {
       setFilteredResults(results);
@@ -122,7 +166,11 @@ export default function ResultsPage() {
 
   const loadLocationMapping = async () => {
     try {
-      const response = await fetch('/api/locations/mapping');
+      // Use cache for faster loading
+      const response = await fetch('/api/locations/mapping', {
+        cache: 'force-cache',
+        next: { revalidate: 600 } // Cache for 10 minutes (locations don't change often)
+      });
       const data = await response.json();
       if (data.success && data.mapping) {
         const mapping: Record<string, { latitude: number; longitude: number; locationName: string; district?: string; mandal?: string; cameraType?: string }> = {};
@@ -143,29 +191,66 @@ export default function ResultsPage() {
     }
   };
 
+  const loadAvailableDates = async () => {
+    try {
+      // Fetch dates from images directory (includes all folder names like 2025-11-30_CHITTOR)
+      const response = await fetch('/api/images/list', {
+        cache: 'no-store' // Always fetch fresh data
+      });
+      const data = await response.json();
+      if (data.success && data.dates) {
+        const imageDates = data.dates || [];
+        
+        // Also get dates from previous results (fresh data)
+        const resultsResponse = await fetch('/api/results/list', {
+          cache: 'no-store'
+        });
+        const resultsData = await resultsResponse.json();
+        
+        const dateSet = new Set<string>(imageDates);
+        
+        // Add dates from previous results
+        if (resultsData.success && resultsData.results) {
+          resultsData.results.forEach((r: PreviousResult) => {
+            if (r.date && r.date.trim()) {
+              const trimmedDate = r.date.trim();
+              dateSet.add(trimmedDate);
+              console.log(`📅 Found date in results: "${trimmedDate}"`);
+            }
+          });
+        }
+        
+        const allDates = Array.from(dateSet)
+          .sort()
+          .reverse();
+        
+        console.log('Available dates from images:', imageDates);
+        console.log('All available dates (combined):', allDates);
+        setAvailableDates(allDates);
+        
+        if (allDates.length > 0 && !selectedDate) {
+          setSelectedDate(allDates[0]);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading available dates:', error);
+    }
+  };
+
   const loadPreviousResults = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/results/list');
+      // Don't use cache - always get fresh results to see newly saved ones
+      const response = await fetch('/api/results/list', {
+        cache: 'no-store' // Always fetch fresh data
+      });
       const data = await response.json();
       if (data.success) {
         const allResults = (data.results || []) as PreviousResult[];
+        const allDatesInResults = [...new Set(allResults.map(r => r.date).filter(Boolean))];
+        console.log(`📊 Loaded ${allResults.length} results`);
+        console.log(`📅 Unique dates found in results:`, allDatesInResults);
         setResults(allResults);
-        
-        // Extract unique dates
-        const dateSet = new Set<string>(
-          allResults
-            .map((r) => r.date)
-            .filter((date): date is string => Boolean(date))
-        );
-        const dates = Array.from(dateSet)
-          .sort()
-          .reverse();
-        setAvailableDates(dates);
-        
-        if (dates.length > 0 && !selectedDate) {
-          setSelectedDate(dates[0]);
-        }
       }
     } catch (error) {
       console.error('Error loading previous results:', error);
@@ -297,6 +382,20 @@ export default function ResultsPage() {
     return timestamp;
   };
 
+  // Extract date and location from date string (e.g., "2025-11-30_chittoor" -> { date: "2025-11-30", location: "chittoor" })
+  const parseDateLocation = (dateStr: string) => {
+    if (!dateStr) return { date: 'unknown', location: '' };
+    
+    const parts = dateStr.split('_');
+    if (parts.length > 1) {
+      return {
+        date: parts[0],
+        location: parts.slice(1).join('_').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+      };
+    }
+    return { date: dateStr, location: '' };
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="w-full h-full">
@@ -364,11 +463,24 @@ export default function ResultsPage() {
             {/* Results List */}
             <div className="p-4">
               {loading ? (
-                <div className="flex items-center justify-center py-12">
-                  <svg className="animate-spin h-8 w-8 text-gray-600" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
+                <div className="space-y-3">
+                  {/* Loading skeleton */}
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="border border-gray-200 rounded-lg p-4 animate-pulse">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="h-4 bg-gray-200 rounded w-32"></div>
+                        <div className="h-3 bg-gray-200 rounded w-24"></div>
+                      </div>
+                      <div className="flex gap-4 mb-2">
+                        <div className="h-3 bg-gray-200 rounded w-24"></div>
+                        <div className="h-3 bg-gray-200 rounded w-20"></div>
+                      </div>
+                      <div className="flex gap-2">
+                        <div className="h-6 bg-gray-200 rounded w-16"></div>
+                        <div className="h-6 bg-gray-200 rounded w-20"></div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               ) : filteredResults.length === 0 ? (
                 <div className="text-center py-12">
@@ -397,8 +509,16 @@ export default function ResultsPage() {
                         </span>
                       </div>
                       <div className="flex gap-4 text-xs text-gray-600 mb-2">
-                        <span>Date: <span className="font-medium text-black">{result.date}</span></span>
-                        <span>Type: <span className="font-medium text-black">{result.cameraType}</span></span>
+                        {(() => {
+                          const { date, location } = parseDateLocation(result.date);
+                          return (
+                            <>
+                              <span>Date: <span className="font-medium text-black">{date}</span></span>
+                              {location && <span>Location: <span className="font-medium text-black">{location}</span></span>}
+                              <span>Type: <span className="font-medium text-black">{result.cameraType}</span></span>
+                            </>
+                          );
+                        })()}
                       </div>
                       <div className="flex gap-2 text-xs mb-3">
                         <span className="px-2 py-1 bg-gray-100 text-gray-800 rounded font-medium border border-gray-300">

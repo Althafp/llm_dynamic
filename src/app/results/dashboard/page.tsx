@@ -6,7 +6,7 @@ import Link from 'next/link';
 import AnalyticsDashboard from '@/components/AnalyticsDashboard';
 import MapView from '@/components/MapView';
 import MatchedImages from '@/components/MatchedImages';
-import { ANALYSIS_PROMPTS } from '@/lib/analysis-prompts';
+import { AnalysisPrompt } from '@/lib/analysis-prompts';
 import { extractIPFromFilename } from '@/lib/image-utils';
 
 interface AnalysisResult {
@@ -67,6 +67,7 @@ function ResultsDashboardContent() {
   const [matchedImages, setMatchedImages] = useState<MatchedImage[]>([]);
   const [locationMapping, setLocationMapping] = useState<Record<string, any>>({});
   const [streamProgress, setStreamProgress] = useState<{ current: number; total: number; matched: number } | null>(null);
+  const [allPrompts, setAllPrompts] = useState<AnalysisPrompt[]>([]);
 
   useEffect(() => {
     const path = searchParams.get('path');
@@ -102,7 +103,7 @@ function ResultsDashboardContent() {
     }
   };
 
-  // Load location mapping
+  // Load location mapping and prompts
   useEffect(() => {
     const loadLocationMapping = async () => {
       try {
@@ -115,7 +116,33 @@ function ResultsDashboardContent() {
         console.error('Error loading location mapping:', error);
       }
     };
+
+    const loadAllPrompts = async () => {
+      try {
+        const response = await fetch('/api/prompts/all');
+        const data = await response.json();
+        if (data.success && data.prompts) {
+          setAllPrompts(data.prompts);
+        }
+      } catch (error) {
+        console.error('Error loading prompts:', error);
+      }
+    };
+
     loadLocationMapping();
+    loadAllPrompts();
+
+    // Refresh prompts when page becomes visible
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        loadAllPrompts().catch(console.error);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, []);
 
   const handleSubmit = async () => {
@@ -214,7 +241,7 @@ function ResultsDashboardContent() {
   const downloadAsHTML = async () => {
     if (matchedImages.length === 0) return;
 
-    const analysisTypeName = ANALYSIS_PROMPTS.find(p => p.id === selectedAnalysisType)?.name || 'Unknown';
+    const analysisTypeName = allPrompts.find(p => p.id === selectedAnalysisType)?.name || 'Unknown';
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T')[0];
     
     // Get public URLs for images (since bucket is public)
@@ -693,26 +720,32 @@ function ResultsDashboardContent() {
               <div className="mb-6">
                 <label className="block text-sm font-medium text-gray-700 mb-3">Select Analysis Type (Select One):</label>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {ANALYSIS_PROMPTS.map((prompt) => (
-                    <label
-                      key={prompt.id}
-                      className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-all ${
-                        selectedAnalysisType === prompt.id
-                          ? 'border-black bg-gray-50'
-                          : 'border-gray-300 hover:bg-gray-50'
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="analysisType"
-                        value={prompt.id}
-                        checked={selectedAnalysisType === prompt.id}
-                        onChange={() => setSelectedAnalysisType(prompt.id)}
-                        className="w-4 h-4 text-black border-gray-300 focus:ring-black"
-                      />
-                      <span className="text-sm font-medium text-gray-800">{prompt.name}</span>
-                    </label>
-                  ))}
+                  {allPrompts.length === 0 ? (
+                    <div className="col-span-full text-center py-4 text-gray-600">
+                      Loading prompts...
+                    </div>
+                  ) : (
+                    allPrompts.map((prompt) => (
+                      <label
+                        key={prompt.id}
+                        className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-all ${
+                          selectedAnalysisType === prompt.id
+                            ? 'border-black bg-gray-50'
+                            : 'border-gray-300 hover:bg-gray-50'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="analysisType"
+                          value={prompt.id}
+                          checked={selectedAnalysisType === prompt.id}
+                          onChange={() => setSelectedAnalysisType(prompt.id)}
+                          className="w-4 h-4 text-black border-gray-300 focus:ring-black"
+                        />
+                        <span className="text-sm font-medium text-gray-800">{prompt.name}</span>
+                      </label>
+                    ))
+                  )}
                 </div>
               </div>
 
@@ -799,7 +832,7 @@ function ResultsDashboardContent() {
                     </div>
                     <div className="bg-gray-50 border border-gray-300 rounded-lg p-4">
                       <div className="text-2xl font-bold text-black mb-1">
-                        {ANALYSIS_PROMPTS.find(p => p.id === selectedAnalysisType)?.name || 'N/A'}
+                        {allPrompts.find(p => p.id === selectedAnalysisType)?.name || 'N/A'}
                       </div>
                       <div className="text-sm text-gray-600">Selected Analysis Type</div>
                     </div>

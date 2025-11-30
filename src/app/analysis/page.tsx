@@ -149,6 +149,8 @@ function AnalysisPageContent() {
     try {
       const imagePaths = imagesToAnalyze.map(img => img.path);
       
+      console.log(`🚀 Starting analysis with date: "${selectedDate}"`);
+      
       const response = await fetch('/api/analyze', {
         method: 'POST',
         headers: {

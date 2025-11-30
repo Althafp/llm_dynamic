@@ -289,10 +289,13 @@ export async function saveAnalysisResults(
   
   // Prepare result data
   const now = new Date();
+  const dateToSave = metadata?.date || 'unknown';
+  console.log(`💾 Saving results with date: "${dateToSave}"`);
+  
   const resultData = {
     timestamp: now.toISOString(),
     metadata: {
-      date: metadata?.date || 'unknown',
+      date: dateToSave,
       cameraType: metadata?.cameraType || 'all',
       totalImages: metadata?.totalImages || results.length,
       processedImages: results.length, // Track how many actually processed
@@ -319,7 +322,7 @@ export async function saveAnalysisResults(
     metadata: {
       metadata: {
         timestamp: now.toISOString(),
-        date: metadata?.date || 'unknown',
+        date: dateToSave, // Use the same date variable
         cameraType: metadata?.cameraType || 'all',
         totalImages: String(summaryTotal),
         successful: String(summarySuccessful),
@@ -329,7 +332,7 @@ export async function saveAnalysisResults(
     },
   });
   
-  console.log(`✅ Saved results: totalImages=${summaryTotal}, successful=${summarySuccessful}, failed=${summaryFailed}`);
+  console.log(`✅ Saved results: date="${dateToSave}", totalImages=${summaryTotal}, successful=${summarySuccessful}, failed=${summaryFailed}`);
   
   const saveType = existingPath ? 'Checkpoint' : 'Results';
   console.log(`${saveType} saved to: ${resultPath} (${results.length} images)`);
@@ -396,7 +399,8 @@ export async function listPreviousResults(): Promise<PreviousResult[]> {
           const metadataFailed = customMetadata.failed;
 
           if (typeof metadataDate === 'string' && metadataDate.trim().length > 0) {
-            date = metadataDate;
+            date = metadataDate.trim();
+            console.log(`📅 Read date from file metadata: "${date}"`);
           }
 
           if (typeof metadataCamera === 'string' && metadataCamera.trim().length > 0) {
@@ -481,7 +485,11 @@ export async function listPreviousResults(): Promise<PreviousResult[]> {
         
         if (parsedData && parsedData.summary) {
           // Use parsed JSON (most reliable)
-          date = parsedData.metadata?.date || 'unknown';
+          const parsedDate = parsedData.metadata?.date || 'unknown';
+          if (parsedDate !== 'unknown') {
+            date = parsedDate;
+            console.log(`📅 Read date from JSON content: "${date}"`);
+          }
           cameraType = parsedData.metadata?.cameraType || 'all';
           totalImages = parsedData.summary?.total || 0;
           successful = parsedData.summary?.successful || 0;
@@ -489,8 +497,12 @@ export async function listPreviousResults(): Promise<PreviousResult[]> {
           created = parsedData.timestamp || file.metadata.updated || '';
         } else {
           // Fallback to regex parsing for partial content
-          const metadataDateMatch = partialContent.match(/"metadata"\s*:\s*\{[\s\S]*?"date"\s*:\s*"([^"]+)"/);
-          if (metadataDateMatch) date = metadataDateMatch[1];
+          // Match date field - capture everything between quotes (handles "2025-11-30_CHITTOR")
+          const metadataDateMatch = partialContent.match(/"date"\s*:\s*"([^"]+)"/);
+          if (metadataDateMatch && metadataDateMatch[1]) {
+            date = metadataDateMatch[1];
+            console.log(`📅 Read date from regex (fallback): "${date}"`);
+          }
           
           const metadataCameraMatch = partialContent.match(/"metadata"\s*:\s*\{[\s\S]*?"cameraType"\s*:\s*"([^"]+)"/);
           if (metadataCameraMatch) cameraType = metadataCameraMatch[1];

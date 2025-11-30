@@ -9,6 +9,8 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { date, cameraType, imagePaths, analysisTypes } = body;
 
+    console.log(`📅 Analysis request received with date: "${date}"`);
+
     if (!date) {
       return NextResponse.json(
         { success: false, error: 'Date is required' },
@@ -55,14 +57,20 @@ export async function POST(request: NextRequest) {
     // Analyze images
     const results = await analyzeImages(images, undefined, analysisTypes);
 
-    // Save results to GCP
+    // Save results to GCP - use the exact date from request (folder name like "2025-11-30_CHITTOR")
     let savedPath = null;
     try {
+      // Ensure date is exactly as received (folder name format)
+      const dateToSave = date.trim(); // Remove any whitespace but keep the exact format
+      console.log(`💾 About to save results with date: "${dateToSave}"`);
+      
       savedPath = await saveAnalysisResults(results, {
-        date,
+        date: dateToSave, // Save exactly as folder name
         cameraType: cameraType || undefined,
         totalImages: images.length,
       });
+      
+      console.log(`✅ Results saved successfully with date: "${dateToSave}"`);
     } catch (saveError) {
       console.error('Error saving results to GCP:', saveError);
       // Continue even if save fails

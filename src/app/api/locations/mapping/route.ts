@@ -17,7 +17,7 @@ interface LocationMapping {
 
 export async function GET() {
   try {
-    const filePath = join(process.cwd(), 'guntur.xlsx');
+    const filePath = join(process.cwd(), 'Book1.xlsx');
     const fileBuffer = readFileSync(filePath);
     const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
     

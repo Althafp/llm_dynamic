@@ -90,10 +90,14 @@ export async function POST(request: NextRequest) {
           try {
             // For incremental saves, use checkpoint path. For final, update the checkpoint
             const pathToUse = checkpointPath || (isFinal ? null : null);
+            // Ensure date is exactly as received (folder name format)
+            const dateToSave = date.trim(); // Remove any whitespace but keep the exact format
+            console.log(`💾 [Stream] Saving results with date: "${dateToSave}"`);
+            
             const savePath = await saveAnalysisResults(
               allResults,
               {
-                date,
+                date: dateToSave, // Save exactly as folder name
                 cameraType: cameraType || undefined,
                 totalImages: images.length,
               },
@@ -225,10 +229,14 @@ export async function POST(request: NextRequest) {
         if (allResults && allResults.length > 0) {
           try {
             console.log(`💾 Attempting to save ${allResults.length} partial results...`);
+            // Ensure date is exactly as received (folder name format)
+            const dateToSave = date.trim(); // Remove any whitespace but keep the exact format
+            console.log(`💾 [Stream Error] Saving partial results with date: "${dateToSave}"`);
+            
             const partialPath = await saveAnalysisResults(
               allResults,
               {
-                date,
+                date: dateToSave, // Save exactly as folder name
                 cameraType: cameraType || undefined,
                 totalImages: images.length,
               },
