@@ -1,14 +1,17 @@
 import OpenAI from 'openai';
-import { getImageUrl, getImageAsBase64 } from './gcp-storage';
-import { ANALYSIS_PROMPTS, type AnalysisPrompt } from './analysis-prompts';
+import { getImageUrl, getImageAsBase64, listCustomPrompts } from './gcp-storage';
+import { DEFAULT_PROMPTS, type AnalysisPrompt } from './analysis-prompts';
 import { withRateLimit } from './rate-limiter';
+
+// Re-export for backward compatibility
+export const ANALYSIS_PROMPTS = DEFAULT_PROMPTS;
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
 // Re-export for backward compatibility
-export { ANALYSIS_PROMPTS, type AnalysisPrompt };
+export type { AnalysisPrompt };
 
 export interface AnalysisResult {
   promptId: string;
@@ -267,6 +270,26 @@ async function analyzeImageWithPromptUsingUrl(
  * Analyze a single image with all prompts
  * Generates signed URL ONCE (no memory buffering) and processes prompts in parallel
  */
+/**
+ * Get all prompts (default + custom)
+ */
+async function getAllPrompts(): Promise<AnalysisPrompt[]> {
+  try {
+    const customPrompts = await listCustomPrompts();
+    const customAnalysisPrompts: AnalysisPrompt[] = customPrompts.map(cp => ({
+      id: cp.id,
+      name: cp.name,
+      searchObjective: cp.searchObjective,
+      lookingFor: cp.lookingFor,
+      detectionCriteria: cp.detectionCriteria,
+    }));
+    return [...DEFAULT_PROMPTS, ...customAnalysisPrompts];
+  } catch (error) {
+    console.error('Error loading custom prompts, using default prompts only:', error);
+    return DEFAULT_PROMPTS;
+  }
+}
+
 export async function analyzeImage(
   imagePath: string,
   filename: string,
@@ -278,10 +301,13 @@ export async function analyzeImage(
   console.log(`\n📸 [${filename}] Starting image analysis...`);
   
   try {
+    // Get all prompts (default + custom)
+    const allPrompts = await getAllPrompts();
+    
     // Filter prompts if specific ones are selected
     const promptsToUse = selectedPromptIds && selectedPromptIds.length > 0
-      ? ANALYSIS_PROMPTS.filter(p => selectedPromptIds.includes(p.id))
-      : ANALYSIS_PROMPTS;
+      ? allPrompts.filter(p => selectedPromptIds.includes(p.id))
+      : allPrompts;
     
     console.log(`📸 [${filename}] Analyzing with ${promptsToUse.length} prompt(s): ${promptsToUse.map(p => p.name).join(', ')}`);
     
@@ -364,11 +390,14 @@ export async function analyzeImages(
   console.log(`🚀 Selected prompts: ${selectedPromptIds && selectedPromptIds.length > 0 ? selectedPromptIds.length : 'ALL'}`);
   console.log(`🚀 ========================================\n`);
   
+  // Get all prompts (default + custom) for calculation
+  const allPrompts = await getAllPrompts();
+  
   // Process images with controlled parallelism to respect rate limits
   // Rate limiter ensures we stay under 500 RPM (8 requests/second)
   // Process 4 images concurrently, each processes prompts sequentially
   // Rate limiter will queue API calls automatically to stay under limit
-  const promptsPerImage = selectedPromptIds?.length || ANALYSIS_PROMPTS.length;
+  const promptsPerImage = selectedPromptIds?.length || allPrompts.length;
   const totalApiCalls = total * promptsPerImage;
   const estimatedMinutes = Math.ceil(totalApiCalls / 480);
   

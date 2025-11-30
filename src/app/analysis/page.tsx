@@ -6,7 +6,7 @@ import ImageSelector from '@/components/ImageSelector';
 import AnalysisResults from '@/components/AnalysisResults';
 import AnalyticsDashboard from '@/components/AnalyticsDashboard';
 import Link from 'next/link';
-import { ANALYSIS_PROMPTS } from '@/lib/analysis-prompts';
+import { AnalysisPrompt, ANALYSIS_PROMPTS } from '@/lib/analysis-prompts';
 
 interface ImageFile {
   name: string;
@@ -41,10 +41,38 @@ function AnalysisPageContent() {
   const [loadingDates, setLoadingDates] = useState(true);
   const [dateError, setDateError] = useState<string | null>(null);
   const [allImages, setAllImages] = useState<ImageFile[]>([]);
+  const [allPrompts, setAllPrompts] = useState<AnalysisPrompt[]>(ANALYSIS_PROMPTS);
 
   useEffect(() => {
     loadDates();
+    loadAllPrompts();
   }, []);
+
+  // Refresh prompts when page becomes visible (user navigates back from prompts page)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        loadAllPrompts();
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
+
+  const loadAllPrompts = async () => {
+    try {
+      const response = await fetch('/api/prompts/all', { cache: 'no-store' });
+      const data = await response.json();
+      if (data.success && data.prompts) {
+        setAllPrompts(data.prompts);
+      }
+    } catch (error) {
+      console.error('Error loading all prompts:', error);
+      // Fallback to default prompts if API fails
+      setAllPrompts(ANALYSIS_PROMPTS);
+    }
+  };
 
   useEffect(() => {
     const dateParam = searchParams.get('date');
@@ -319,7 +347,7 @@ function AnalysisPageContent() {
                 Analysis Types (Select which types to analyze)
               </label>
               <div className="flex flex-wrap gap-3">
-                {ANALYSIS_PROMPTS.map((prompt) => (
+                {allPrompts.map((prompt) => (
                   <label
                     key={prompt.id}
                     className="flex items-center gap-2 p-3 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 transition-all bg-white"
@@ -351,7 +379,7 @@ function AnalysisPageContent() {
               <p className="text-sm text-gray-600 mt-3">
                 {selectedAnalysisTypes.length === 0
                   ? 'All analysis types will be performed'
-                  : `Selected: ${selectedAnalysisTypes.map(id => ANALYSIS_PROMPTS.find(p => p.id === id)?.name).join(', ')}`}
+                  : `Selected: ${selectedAnalysisTypes.map(id => allPrompts.find(p => p.id === id)?.name).join(', ')}`}
               </p>
             </div>
           </div>

@@ -90,7 +90,10 @@ export async function listAvailableDates(): Promise<string[]> {
     });
 
     const dates = new Set<string>();
-    const datePattern = /^images\/(\d{4}-\d{2}-\d{2})\/$/;
+    // Updated pattern to match both formats:
+    // - Old format: 2025-11-30
+    // - New format: 2025-11-30_chittoor (case-insensitive location name)
+    const datePattern = /^images\/(\d{4}-\d{2}-\d{2}(?:_[a-zA-Z0-9_]+)?)\/$/i;
     
     // Extract dates from folder prefixes (faster than iterating all files)
     const prefixes = (apiResponse as any)?.prefixes as string[] | undefined;
@@ -106,7 +109,7 @@ export async function listAvailableDates(): Promise<string[]> {
     // Fallback: Extract from file paths if prefixes didn't work
     if (dates.size === 0) {
       files.forEach(file => {
-        const match = file.name.match(/^images\/(\d{4}-\d{2}-\d{2})\//);
+        const match = file.name.match(/^images\/(\d{4}-\d{2}-\d{2}(?:_[a-zA-Z0-9_]+)?)\//i);
         if (match && match[1]) {
           dates.add(match[1]);
         }
@@ -609,5 +612,118 @@ export async function deleteImage(imagePath: string): Promise<boolean> {
     console.error(`❌ Error deleting image ${imagePath}:`, error);
     throw error;
   }
+}
+
+/**
+ * Custom Prompts Management
+ */
+const PROMPTS_FILE_PATH = 'prompts/custom-prompts.json';
+
+export interface CustomPrompt {
+  id: string;
+  name: string;
+  searchObjective: string;
+  lookingFor: string;
+  detectionCriteria: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * List all custom prompts
+ */
+export async function listCustomPrompts(): Promise<CustomPrompt[]> {
+  try {
+    const client = getStorageClient();
+    const bucket = client.bucket(BUCKET_NAME);
+    const file = bucket.file(PROMPTS_FILE_PATH);
+    
+    const [exists] = await file.exists();
+    if (!exists) {
+      return [];
+    }
+    
+    const [buffer] = await file.download();
+    const data = JSON.parse(buffer.toString());
+    return Array.isArray(data.prompts) ? data.prompts : [];
+  } catch (error) {
+    console.error('Error listing custom prompts:', error);
+    return [];
+  }
+}
+
+/**
+ * Save custom prompts
+ */
+export async function saveCustomPrompts(prompts: CustomPrompt[]): Promise<void> {
+  const client = getStorageClient();
+  const bucket = client.bucket(BUCKET_NAME);
+  const file = bucket.file(PROMPTS_FILE_PATH);
+  
+  const data = {
+    prompts,
+    updatedAt: new Date().toISOString(),
+  };
+  
+  await file.save(JSON.stringify(data, null, 2), {
+    contentType: 'application/json',
+  });
+  
+  console.log(`✅ Saved ${prompts.length} custom prompt(s)`);
+}
+
+/**
+ * Add a new custom prompt
+ */
+export async function addCustomPrompt(prompt: Omit<CustomPrompt, 'id' | 'createdAt' | 'updatedAt'>): Promise<CustomPrompt> {
+  const prompts = await listCustomPrompts();
+  
+  const newPrompt: CustomPrompt = {
+    ...prompt,
+    id: `custom_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  
+  prompts.push(newPrompt);
+  await saveCustomPrompts(prompts);
+  
+  return newPrompt;
+}
+
+/**
+ * Update an existing custom prompt
+ */
+export async function updateCustomPrompt(id: string, updates: Partial<Omit<CustomPrompt, 'id' | 'createdAt'>>): Promise<CustomPrompt | null> {
+  const prompts = await listCustomPrompts();
+  const index = prompts.findIndex(p => p.id === id);
+  
+  if (index === -1) {
+    return null;
+  }
+  
+  prompts[index] = {
+    ...prompts[index],
+    ...updates,
+    updatedAt: new Date().toISOString(),
+  };
+  
+  await saveCustomPrompts(prompts);
+  return prompts[index];
+}
+
+/**
+ * Delete a custom prompt
+ */
+export async function deleteCustomPrompt(id: string): Promise<boolean> {
+  const prompts = await listCustomPrompts();
+  const filtered = prompts.filter(p => p.id !== id);
+  
+  if (filtered.length === prompts.length) {
+    return false; // Prompt not found
+  }
+  
+  await saveCustomPrompts(filtered);
+  return true;
 }
 

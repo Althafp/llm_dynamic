@@ -1,6 +1,7 @@
 """
 Upload all images from local folder to GCP Cloud Storage bucket.
-Maintains the folder structure: images/YYYY-MM-DD/ANALYTICS|FIXED|PTZ/
+Maintains the folder structure: images/YYYY-MM-DD_location/ANALYTICS|FIXED|PTZ/
+Supports both old format (YYYY-MM-DD) and new format (YYYY-MM-DD_location)
 """
 
 import os
@@ -40,11 +41,12 @@ def upload_images_to_gcs():
             file_path = Path(root) / file
             if file_path.suffix.lower() in IMAGE_EXTENSIONS:
                 # Get relative path from images directory
-                DATE_FOLDER_NAME = LOCAL_IMAGES_DIR.name  # Example: "2025-11-25"
+                # Folder name can be either "2025-11-25" or "2025-11-25_chittoor"
+                DATE_FOLDER_NAME = LOCAL_IMAGES_DIR.name
 
                 rel_path = file_path.relative_to(LOCAL_IMAGES_DIR)
 
-                # Ensure uploaded path is images/<DATE>/<subfolders>
+                # Ensure uploaded path is images/<DATE> or images/<DATE_location>/<subfolders>
                 gcs_path = f"images/{DATE_FOLDER_NAME}/{rel_path.as_posix()}"
 
                 image_files.append((file_path, gcs_path))

@@ -22,7 +22,10 @@ BASE_DIR = Path.cwd() / "images"
 TODAY = datetime.now().strftime("%Y-%m-%d")
 # NOW = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
-OUT_DIR = BASE_DIR / TODAY
+# Extract location name from Excel filename (e.g., "guntur" from "guntur.xlsx")
+EXCEL_FILE = Path(EXCEL_PATH)
+LOCATION_NAME = EXCEL_FILE.stem.lower().replace(" ", "_")  # Get filename without extension
+OUT_DIR = BASE_DIR / f"{TODAY}_{LOCATION_NAME}"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 MAX_PROCESSES = 40

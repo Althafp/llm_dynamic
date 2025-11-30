@@ -8,7 +8,7 @@ import AnalyticsDashboard from '@/components/AnalyticsDashboard';
 import MatchedImages from '@/components/MatchedImages';
 import MapView from '@/components/MapView';
 import { extractIPFromFilename } from '@/lib/image-utils';
-import { ANALYSIS_PROMPTS } from '@/lib/analysis-prompts';
+import { AnalysisPrompt, ANALYSIS_PROMPTS } from '@/lib/analysis-prompts';
 
 interface PreviousResult {
   timestamp: string;
@@ -75,11 +75,39 @@ export default function ResultsPage() {
   const [matchedImages, setMatchedImages] = useState<MatchedImage[]>([]);
   const [locationMapping, setLocationMapping] = useState<Record<string, { latitude: number; longitude: number; locationName: string; district?: string; mandal?: string; cameraType?: string }>>({});
   const [loadingImages, setLoadingImages] = useState(false);
+  const [allPrompts, setAllPrompts] = useState<AnalysisPrompt[]>(ANALYSIS_PROMPTS);
 
   useEffect(() => {
     loadPreviousResults();
     loadLocationMapping();
+    loadAllPrompts();
   }, []);
+
+  // Refresh prompts when page becomes visible (user navigates back from prompts page)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        loadAllPrompts();
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
+
+  const loadAllPrompts = async () => {
+    try {
+      const response = await fetch('/api/prompts/all', { cache: 'no-store' });
+      const data = await response.json();
+      if (data.success && data.prompts) {
+        setAllPrompts(data.prompts);
+      }
+    } catch (error) {
+      console.error('Error loading all prompts:', error);
+      // Fallback to default prompts if API fails
+      setAllPrompts(ANALYSIS_PROMPTS);
+    }
+  };
 
   useEffect(() => {
     if (selectedDate) {
@@ -430,7 +458,7 @@ export default function ResultsPage() {
                     <div className="mb-6">
                       <label className="block text-sm font-medium text-gray-700 mb-3">Select Analysis Type (Select One):</label>
                       <div className="space-y-2">
-                        {ANALYSIS_PROMPTS.map((prompt) => (
+                        {allPrompts.map((prompt) => (
                           <label
                             key={prompt.id}
                             className="flex items-center gap-3 p-3 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 transition-all"
@@ -514,7 +542,7 @@ export default function ResultsPage() {
                         <div className="mt-4 pt-4 border-t border-gray-300">
                           <div className="text-sm text-gray-600">
                             <span className="font-medium text-black">Selected Analysis Type:</span>{' '}
-                            {ANALYSIS_PROMPTS.find(p => p.id === selectedAnalysisType)?.name || 'N/A'}
+                            {allPrompts.find(p => p.id === selectedAnalysisType)?.name || 'N/A'}
                           </div>
                         </div>
                       </div>

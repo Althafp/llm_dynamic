@@ -6,7 +6,8 @@ export interface AnalysisPrompt {
     detectionCriteria: string;
   }
   
-  export const ANALYSIS_PROMPTS: AnalysisPrompt[] = [
+  // Default prompts (built-in)
+  export const DEFAULT_PROMPTS: AnalysisPrompt[] = [
     {
       id: 'crowd_detection',
       name: 'Crowd Detection',
@@ -67,4 +68,7 @@ export interface AnalysisPrompt {
       
       
   ];
+
+  // Export default prompts as ANALYSIS_PROMPTS for backward compatibility
+  export const ANALYSIS_PROMPTS: AnalysisPrompt[] = DEFAULT_PROMPTS;
   
